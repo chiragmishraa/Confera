@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { authAPI } from "../api/auth";
 import { sessionAPI } from "../api/session";
+import { SOCKET_URL } from "../utils/constants";
 import { useNavigate } from "react-router-dom";
 import { 
   Video, 
@@ -261,7 +262,7 @@ export default function Meeting() {
     if (!currentUser) return;
 
     // Connect to socket.io through the same origin (will use proxy)
-    socketRef.current = io({
+    socketRef.current = io(SOCKET_URL || undefined, {
       path: '/socket.io',
       transports: ['websocket', 'polling']
     });

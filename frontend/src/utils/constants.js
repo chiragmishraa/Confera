@@ -1,5 +1,8 @@
 // API Configuration
-export const API_BASE_URL = '/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+// Socket.IO
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
 
 // File Upload
 export const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
