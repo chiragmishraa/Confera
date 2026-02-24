@@ -1,4 +1,4 @@
-# 📹 Meeting App - Google Meet Clone
+# 📹 Confera
 
 A real-time video conferencing application built with React, Node.js, Socket.io, and WebRTC.
 
