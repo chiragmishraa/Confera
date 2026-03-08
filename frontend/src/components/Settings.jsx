@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { authAPI } from "../api/auth";
-import { Settings as SettingsIcon, User, Lock, Info, Camera, Trash2, Save, LogOut, RotateCcw, Check, X as CloseIcon, Eye, EyeOff, Edit } from "lucide-react";
+import { Settings as SettingsIcon, User, Lock, Info, Camera, Trash2, Save, LogOut, RotateCcw, Check, X as CloseIcon, Eye, EyeOff, Edit, Video, Monitor, MessageSquare, Shield } from "lucide-react";
 
 export default function Settings({ isOpen, onClose, user, onUpdate }) {
   const [activeTab, setActiveTab] = useState("profile");
@@ -379,6 +379,7 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
       right: 0,
       bottom: 0,
       background: "rgba(0, 0, 0, 0.7)",
+      backdropFilter: "blur(4px)",
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
@@ -1032,10 +1033,10 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                   border: "1px solid #334155"
                 }}>
                   <div style={{ 
-                    fontSize: "24px", 
+                    color: "#3b82f6",
                     marginBottom: "8px" 
                   }}>
-                    
+                    <Video size={28} />
                   </div>
                   <h4 style={{ 
                     margin: "0 0 6px 0", 
@@ -1043,7 +1044,7 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                     fontSize: "15px",
                     fontWeight: "600"
                   }}>
-                    ▶ HD Video
+                    HD Video
                   </h4>
                   <p style={{ 
                     margin: 0, 
@@ -1062,10 +1063,10 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                   border: "1px solid #334155"
                 }}>
                   <div style={{ 
-                    fontSize: "24px", 
+                    color: "#10b981",
                     marginBottom: "8px" 
                   }}>
-                    
+                    <Monitor size={28} />
                   </div>
                   <h4 style={{ 
                     margin: "0 0 6px 0", 
@@ -1073,7 +1074,7 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                     fontSize: "15px",
                     fontWeight: "600"
                   }}>
-                    ⎙ Screen Share
+                    Screen Share
                   </h4>
                   <p style={{ 
                     margin: 0, 
@@ -1092,10 +1093,10 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                   border: "1px solid #334155"
                 }}>
                   <div style={{ 
-                    fontSize: "24px", 
+                    color: "#8b5cf6",
                     marginBottom: "8px" 
                   }}>
-                    
+                    <MessageSquare size={28} />
                   </div>
                   <h4 style={{ 
                     margin: "0 0 6px 0", 
@@ -1103,7 +1104,7 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                     fontSize: "15px",
                     fontWeight: "600"
                   }}>
-                    ✉ Real-time Chat
+                    Real-time Chat
                   </h4>
                   <p style={{ 
                     margin: 0, 
@@ -1122,10 +1123,10 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                   border: "1px solid #334155"
                 }}>
                   <div style={{ 
-                    fontSize: "24px", 
+                    color: "#f59e0b",
                     marginBottom: "8px" 
                   }}>
-                    
+                    <Shield size={28} />
                   </div>
                   <h4 style={{ 
                     margin: "0 0 6px 0", 
@@ -1133,7 +1134,7 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                     fontSize: "15px",
                     fontWeight: "600"
                   }}>
-                    🔒 Secure
+                    Secure
                   </h4>
                   <p style={{ 
                     margin: 0, 
