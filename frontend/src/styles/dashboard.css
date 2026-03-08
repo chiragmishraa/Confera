@@ -201,17 +201,233 @@
 }
 
 .background-watermark {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 180px;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.02);
+  color: rgb(255, 255, 255);
   letter-spacing: -10px;
   user-select: none;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 0;
+}
+
+/* Aurora Background Effect - Desktop Only */
+.aurora-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  /* GPU optimization */
+  perspective: 1000px;
+}
+
+.aurora-line {
+  position: absolute;
+  width: 300%;
+  height: 150%;
+  left: -100%;
+  top: -25%;
+  opacity: 0.25;
+  filter: blur(1px);
+  /* GPU acceleration and stability */
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  /* Smooth transitions for cursor movement */
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.aurora-background.active .aurora-line {
+  opacity: 0.8;
+  filter: blur(0px) brightness(1.5) saturate(1.5);
+}
+
+@keyframes aurora-breathe {
+  0% {
+    opacity: 0.25;
+    filter: blur(1px) brightness(1) saturate(1);
+  }
+  50% {
+    opacity: 0.7;
+    filter: blur(0px) brightness(1.4) saturate(1.4);
+  }
+  100% {
+    opacity: 0.25;
+    filter: blur(1px) brightness(1) saturate(1);
+  }
+}
+
+.aurora-line-1 {
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    transparent 20%,
+    rgba(139, 92, 246, 0.2) 40%,
+    rgba(59, 130, 246, 0.2) 50%,
+    rgba(139, 92, 246, 0.2) 60%,
+    transparent 80%,
+    transparent 100%
+  );
+  clip-path: path('M -1000,100 Q -500,50 0,100 T 1000,100 T 2000,100 T 3000,100 T 4000,100 T 5000,100 T 6000,100 L 6000,300 Q 5500,250 5000,300 T 4000,300 T 3000,300 T 2000,300 T 1000,300 T 0,300 T -1000,300 Z');
+  animation: aurora-wave-1 20s ease-in-out infinite;
+}
+
+.aurora-line-2 {
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    transparent 30%,
+    rgba(236, 72, 153, 0.15) 45%,
+    rgba(59, 130, 246, 0.15) 55%,
+    rgba(236, 72, 153, 0.15) 65%,
+    transparent 85%,
+    transparent 100%
+  );
+  clip-path: path('M -1200,200 Q -600,150 0,200 T 1200,200 T 2400,200 T 3600,200 T 4800,200 T 6000,200 T 7200,200 L 7200,400 Q 6600,350 6000,400 T 4800,400 T 3600,400 T 2400,400 T 1200,400 T 0,400 T -1200,400 Z');
+  animation: aurora-wave-2 25s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+.aurora-line-3 {
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    transparent 40%,
+    rgba(16, 185, 129, 0.12) 50%,
+    rgba(139, 92, 246, 0.12) 60%,
+    rgba(16, 185, 129, 0.12) 70%,
+    transparent 90%,
+    transparent 100%
+  );
+  clip-path: path('M -1400,400 Q -700,320 0,400 T 1400,400 T 2800,400 T 4200,400 T 5600,400 T 7000,400 T 8400,400 L 8400,600 Q 7700,520 7000,600 T 5600,600 T 4200,600 T 2800,600 T 1400,600 T 0,600 T -1400,600 Z');
+  animation: aurora-wave-3 30s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+.aurora-line-4 {
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    transparent 10%,
+    rgba(59, 130, 246, 0.18) 30%,
+    rgba(236, 72, 153, 0.18) 40%,
+    rgba(59, 130, 246, 0.18) 50%,
+    transparent 70%,
+    transparent 100%
+  );
+  clip-path: path('M -800,50 Q -400,10 0,50 T 800,50 T 1600,50 T 2400,50 T 3200,50 T 4000,50 T 4800,50 L 4800,200 Q 4400,160 4000,200 T 3200,200 T 2400,200 T 1600,200 T 800,200 T 0,200 T -800,200 Z');
+  animation: aurora-wave-4 22s ease-in-out infinite;
+  animation-delay: -3s;
+}
+
+.aurora-line-5 {
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    transparent 50%,
+    rgba(139, 92, 246, 0.1) 60%,
+    rgba(16, 185, 129, 0.1) 70%,
+    rgba(139, 92, 246, 0.1) 80%,
+    transparent 95%,
+    transparent 100%
+  );
+  clip-path: path('M -1600,550 Q -800,480 0,550 T 1600,550 T 3200,550 T 4800,550 T 6400,550 T 8000,550 T 9600,550 L 9600,750 Q 8800,680 8000,750 T 6400,750 T 4800,750 T 3200,750 T 1600,750 T 0,750 T -1600,750 Z');
+  animation: aurora-wave-5 28s ease-in-out infinite;
+  animation-delay: -15s;
+}
+
+@keyframes aurora-wave-1 {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+    clip-path: path('M -1000,100 Q -500,50 0,100 T 1000,100 T 2000,100 T 3000,100 T 4000,100 T 5000,100 T 6000,100 L 6000,300 Q 5500,250 5000,300 T 4000,300 T 3000,300 T 2000,300 T 1000,300 T 0,300 T -1000,300 Z');
+  }
+  25% {
+    transform: translateX(-50px) translateY(-20px);
+    clip-path: path('M -1000,120 Q -500,70 0,120 T 1000,80 T 2000,120 T 3000,90 T 4000,120 T 5000,100 T 6000,120 L 6000,320 Q 5500,270 5000,320 T 4000,280 T 3000,320 T 2000,290 T 1000,320 T 0,300 T -1000,320 Z');
+  }
+  50% {
+    transform: translateX(-100px) translateY(0);
+    clip-path: path('M -1000,90 Q -500,140 0,90 T 1000,110 T 2000,90 T 3000,120 T 4000,90 T 5000,110 T 6000,90 L 6000,290 Q 5500,340 5000,290 T 4000,310 T 3000,290 T 2000,320 T 1000,290 T 0,310 T -1000,290 Z');
+  }
+  75% {
+    transform: translateX(-50px) translateY(20px);
+    clip-path: path('M -1000,110 Q -500,60 0,110 T 1000,90 T 2000,110 T 3000,100 T 4000,110 T 5000,95 T 6000,110 L 6000,310 Q 5500,260 5000,310 T 4000,290 T 3000,310 T 2000,300 T 1000,310 T 0,295 T -1000,310 Z');
+  }
+}
+
+@keyframes aurora-wave-2 {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+    clip-path: path('M -1200,200 Q -600,150 0,200 T 1200,200 T 2400,200 T 3600,200 T 4800,200 T 6000,200 T 7200,200 L 7200,400 Q 6600,350 6000,400 T 4800,400 T 3600,400 T 2400,400 T 1200,400 T 0,400 T -1200,400 Z');
+  }
+  33% {
+    transform: translateX(-80px) translateY(30px);
+    clip-path: path('M -1200,180 Q -600,230 0,180 T 1200,220 T 2400,180 T 3600,210 T 4800,180 T 6000,200 T 7200,180 L 7200,380 Q 6600,430 6000,380 T 4800,420 T 3600,380 T 2400,410 T 1200,380 T 0,400 T -1200,380 Z');
+  }
+  66% {
+    transform: translateX(-160px) translateY(-30px);
+    clip-path: path('M -1200,220 Q -600,170 0,220 T 1200,190 T 2400,220 T 3600,200 T 4800,220 T 6000,210 T 7200,220 L 7200,420 Q 6600,370 6000,420 T 4800,390 T 3600,420 T 2400,400 T 1200,420 T 0,410 T -1200,420 Z');
+  }
+}
+
+@keyframes aurora-wave-3 {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+    clip-path: path('M -1400,400 Q -700,320 0,400 T 1400,400 T 2800,400 T 4200,400 T 5600,400 T 7000,400 T 8400,400 L 8400,600 Q 7700,520 7000,600 T 5600,600 T 4200,600 T 2800,600 T 1400,600 T 0,600 T -1400,600 Z');
+  }
+  20% {
+    transform: translateX(-60px) translateY(-40px);
+    clip-path: path('M -1400,380 Q -700,460 0,380 T 1400,420 T 2800,380 T 4200,410 T 5600,380 T 7000,400 T 8400,380 L 8400,580 Q 7700,660 7000,580 T 5600,620 T 4200,580 T 2800,610 T 1400,580 T 0,600 T -1400,580 Z');
+  }
+  40% {
+    transform: translateX(-120px) translateY(20px);
+    clip-path: path('M -1400,420 Q -700,340 0,420 T 1400,390 T 2800,420 T 4200,400 T 5600,420 T 7000,410 T 8400,420 L 8400,620 Q 7700,540 7000,620 T 5600,590 T 4200,620 T 2800,600 T 1400,620 T 0,610 T -1400,620 Z');
+  }
+  60% {
+    transform: translateX(-180px) translateY(-20px);
+    clip-path: path('M -1400,390 Q -700,470 0,390 T 1400,410 T 2800,390 T 4200,420 T 5600,390 T 7000,405 T 8400,390 L 8400,590 Q 7700,670 7000,590 T 5600,610 T 4200,590 T 2800,620 T 1400,590 T 0,605 T -1400,590 Z');
+  }
+  80% {
+    transform: translateX(-240px) translateY(40px);
+    clip-path: path('M -1400,430 Q -700,350 0,430 T 1400,400 T 2800,430 T 4200,410 T 5600,430 T 7000,415 T 8400,430 L 8400,630 Q 7700,550 7000,630 T 5600,600 T 4200,630 T 2800,610 T 1400,630 T 0,615 T -1400,630 Z');
+  }
+}
+
+@keyframes aurora-wave-4 {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+    clip-path: path('M -800,50 Q -400,10 0,50 T 800,50 T 1600,50 T 2400,50 T 3200,50 T 4000,50 T 4800,50 L 4800,200 Q 4400,160 4000,200 T 3200,200 T 2400,200 T 1600,200 T 800,200 T 0,200 T -800,200 Z');
+  }
+  30% {
+    transform: translateX(-70px) translateY(25px);
+    clip-path: path('M -800,40 Q -400,80 0,40 T 800,70 T 1600,40 T 2400,60 T 3200,40 T 4000,55 T 4800,40 L 4800,190 Q 4400,230 4000,190 T 3200,220 T 2400,190 T 1600,210 T 800,190 T 0,205 T -800,190 Z');
+  }
+  60% {
+    transform: translateX(-140px) translateY(-25px);
+    clip-path: path('M -800,60 Q -400,20 0,60 T 800,40 T 1600,60 T 2400,50 T 3200,60 T 4000,45 T 4800,60 L 4800,210 Q 4400,170 4000,210 T 3200,190 T 2400,210 T 1600,200 T 800,210 T 0,195 T -800,210 Z');
+  }
+}
+
+@keyframes aurora-wave-5 {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+    clip-path: path('M -1600,550 Q -800,480 0,550 T 1600,550 T 3200,550 T 4800,550 T 6400,550 T 8000,550 T 9600,550 L 9600,750 Q 8800,680 8000,750 T 6400,750 T 4800,750 T 3200,750 T 1600,750 T 0,750 T -1600,750 Z');
+  }
+  25% {
+    transform: translateX(-90px) translateY(35px);
+    clip-path: path('M -1600,530 Q -800,600 0,530 T 1600,570 T 3200,530 T 4800,560 T 6400,530 T 8000,545 T 9600,530 L 9600,730 Q 8800,800 8000,730 T 6400,770 T 4800,730 T 3200,760 T 1600,730 T 0,745 T -1600,730 Z');
+  }
+  50% {
+    transform: translateX(-180px) translateY(-35px);
+    clip-path: path('M -1600,570 Q -800,500 0,570 T 1600,540 T 3200,570 T 4800,550 T 6400,570 T 8000,555 T 9600,570 L 9600,770 Q 8800,700 8000,770 T 6400,740 T 4800,770 T 3200,750 T 1600,770 T 0,755 T -1600,770 Z');
+  }
+  75% {
+    transform: translateX(-270px) translateY(20px);
+    clip-path: path('M -1600,540 Q -800,610 0,540 T 1600,560 T 3200,540 T 4800,555 T 6400,540 T 8000,550 T 9600,540 L 9600,740 Q 8800,810 8000,740 T 6400,760 T 4800,740 T 3200,755 T 1600,740 T 0,750 T -1600,740 Z');
+  }
 }
 
 .content-center {
@@ -281,11 +497,6 @@
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.action-card.primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border: none;
-}
-
 .card-icon {
   width: 56px;
   height: 56px;
@@ -298,8 +509,20 @@
   color: white;
 }
 
+.action-card.primary {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .action-card.primary .card-icon {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.action-card.primary:hover {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .action-card h3 {
