@@ -1,5 +1,5 @@
 import "../styles/dashboard.css";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Settings from "../components/Settings";
 import TiltCard from "../components/TiltCard";
@@ -16,7 +16,46 @@ export default function Dashboard() {
   const [successMessage, setSuccessMessage] = useState("");
   const [joinError, setJoinError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isMouseMoving, setIsMouseMoving] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const { user, isAuthenticated, loading, updateUser } = useAuth();
+  
+  // Use refs for timeouts to prevent stale closures
+  const mouseTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    // Detect if device is mobile (touch-only)
+    const isMobile = !window.matchMedia('(pointer: fine)').matches;
+    setIsMobileDevice(isMobile);
+    
+    const handleMouseMove = () => {
+      // Only trigger on desktop devices
+      if (isMobile) return;
+      
+      setIsMouseMoving(true);
+      if (mouseTimeoutRef.current) {
+        clearTimeout(mouseTimeoutRef.current);
+      }
+      mouseTimeoutRef.current = setTimeout(() => {
+        setIsMouseMoving(false);
+      }, 150);
+    };
+
+    // Desktop: mouse events only
+    if (!isMobile) {
+      window.addEventListener('mousemove', handleMouseMove);
+    }
+    
+    return () => {
+      // Cleanup event listeners
+      window.removeEventListener('mousemove', handleMouseMove);
+      
+      // Clear timeouts
+      if (mouseTimeoutRef.current) {
+        clearTimeout(mouseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Set page title
@@ -197,8 +236,16 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="main-content">
-        {/* Background Watermark */}
-        <div className="background-watermark">Confera</div>
+        {/* Aurora Background Effect - Desktop Only */}
+        {!isMobileDevice && (
+          <div className={`aurora-background ${isMouseMoving ? 'active' : ''}`}>
+            <div className="aurora-line aurora-line-1"></div>
+            <div className="aurora-line aurora-line-2"></div>
+            <div className="aurora-line aurora-line-3"></div>
+            <div className="aurora-line aurora-line-4"></div>
+            <div className="aurora-line aurora-line-5"></div>
+          </div>
+        )}
 
         <div className="content-center">
           <h1 className="main-title">Welcome to Confera</h1>
@@ -273,11 +320,11 @@ export default function Dashboard() {
           <Video size={24} />
           <span>Home</span>
         </button>
-        <button className="bottom-nav-item" onClick={() => setShowRecentMeetings(true)}>
+        <button className={`bottom-nav-item ${showRecentMeetings ? 'active' : ''}`} onClick={() => setShowRecentMeetings(true)}>
           <Clock size={24} />
           <span>Recent</span>
         </button>
-        <button className="bottom-nav-item" onClick={() => setShowSettings(true)}>
+        <button className={`bottom-nav-item ${showSettings ? 'active' : ''}`} onClick={() => setShowSettings(true)}>
           <Users size={24} />
           <span>Profile</span>
         </button>
