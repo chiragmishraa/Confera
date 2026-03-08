@@ -5,7 +5,7 @@ import Settings from "../components/Settings";
 import TiltCard from "../components/TiltCard";
 import { useAuth } from "../contexts/AuthContext";
 import { sessionAPI } from "../api/session";
-import { Video, Plus, Clock, Users, Trash2, X, CheckCircle, Link2 } from "lucide-react";
+import { Video, Plus, Clock, Users, Trash2, X, CheckCircle, Link2, Settings as SettingsIcon } from "lucide-react";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -325,8 +325,8 @@ export default function Dashboard() {
           <span>Recent</span>
         </button>
         <button className={`bottom-nav-item ${showSettings ? 'active' : ''}`} onClick={() => setShowSettings(true)}>
-          <Users size={24} />
-          <span>Profile</span>
+          <SettingsIcon size={24} />
+          <span>Settings</span>
         </button>
       </nav>
 
