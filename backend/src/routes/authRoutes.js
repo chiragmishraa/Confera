@@ -16,14 +16,18 @@ const {
   logout,
   getProfile,
   updateProfile,
-  changePassword
+  changePassword,
+  guestLogin,
+  deleteAccount
 } = require('../controllers/authController');
 
 router.post('/signup', authLimiter, signupValidation, validate, signup);
 router.post('/login', authLimiter, loginValidation, validate, login);
+router.post('/guest-login', authLimiter, guestLogin);
 router.post('/logout', protect, logout);
 router.get('/profile', protect, getProfile);
 router.put('/profile', protect, updateProfileValidation, validate, updateProfile);
 router.put('/change-password', protect, changePasswordValidation, validate, changePassword);
+router.delete('/account', protect, deleteAccount);
 
 module.exports = router;

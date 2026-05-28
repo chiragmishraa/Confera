@@ -4,6 +4,7 @@ import { authAPI } from "../api/auth";
 import { sessionAPI } from "../api/session";
 import { SOCKET_URL } from "../utils/constants";
 import { useNavigate } from "react-router-dom";
+import Settings from "../components/Settings";
 import { 
   Video, 
   VideoOff, 
@@ -17,8 +18,160 @@ import {
   Copy,
   Keyboard,
   Monitor,
-  MonitorOff
+  MonitorOff,
+  Eye,
+  EyeOff,
+  Lock,
+  LockOpen,
+  Volume2,
+  VolumeX,
+  Check,
+  Circle,
+  Pause,
+  Play,
+  Maximize,
+  Minimize,
+  VolumeX as VolumeOff,
+  Camera,
+  CameraOff,
+  Wifi,
+  WifiOff,
+  AlertTriangle,
+  RefreshCw,
+  Smartphone,
+  Zap,
+  MousePointer,
+  MessageCircleOff,
+  UserX,
+  MonitorX,
+  Headphones,
+  ChevronDown
 } from "lucide-react";
+
+// Custom scrollbar styles
+const scrollbarStyles = `
+  *, *::before, *::after {
+    -webkit-tap-highlight-color: transparent !important;
+    box-sizing: border-box;
+  }
+
+  html, body {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  button, a, div, video, span, input, textarea {
+    -webkit-tap-highlight-color: transparent !important;
+    outline: none;
+  }
+
+  button {
+    -webkit-appearance: none;
+  }
+
+  button:focus, button:active {
+    outline: none !important;
+    box-shadow: none;
+  }
+
+  :focus {
+    outline: none !important;
+  }
+
+  #screen-container, #screen-video,
+  [id^="screen-container-"], [id^="screen-video-"] {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .screen-controls {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 0;
+    transform: scale(0.95);
+    pointer-events: none;
+  }
+
+  .screen-controls.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
+
+  .screen-controls button {
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+
+  .screen-controls button:active {
+    transform: scale(0.85) !important;
+  }
+  .chat-messages-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .chat-messages-scroll::-webkit-scrollbar-track {
+    background: #1e293b;
+    border-radius: 4px;
+  }
+  
+  .chat-messages-scroll::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 4px;
+  }
+  
+  .chat-messages-scroll::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+  
+  @keyframes soundWave {
+    0%, 100% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0.6;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.3);
+      opacity: 0.2;
+    }
+  }
+  
+  .sound-wave {
+    animation: soundWave 1.5s ease-in-out infinite;
+  }
+
+  #screen-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    touch-action: manipulation;
+    background: black;
+  }
+
+  #screen-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: black;
+  }
+
+  :fullscreen #screen-container,
+  :-webkit-full-screen #screen-container {
+    width: 100vw;
+    height: 100vh;
+    background: black;
+  }
+`;
+
+/* Disable all console logs
+if (process.env.NODE_ENV === 'production' || true) {
+  console.log = () => {};
+  console.error = () => {};
+  console.warn = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+}
+*/
 
 export default function Meeting() {
   const navigate = useNavigate();
@@ -58,6 +211,8 @@ export default function Meeting() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const timerIntervalRef = useRef(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isUserReady, setIsUserReady] = useState(false); // Fires socket effect exactly once
+  const currentUserRef = useRef(null); // Ref so socket effect can read latest user without re-running
   const [participants, setParticipants] = useState({}); // Store user info by socket ID
   const [participantMediaStatus, setParticipantMediaStatus] = useState({}); // Track camera/mic status for each participant
   const [showChat, setShowChat] = useState(false);
@@ -67,16 +222,45 @@ export default function Meeting() {
   const messagesEndRef = useRef(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [footerVisible, setFooterVisible] = useState(true);
+  const footerTimerRef = useRef(null);
+  const [openTroubleshootIndex, setOpenTroubleshootIndex] = useState(null);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showCopied, setShowCopied] = useState(false);
   const [showChatReset, setShowChatReset] = useState(false);
   const [chatPosition, setChatPosition] = useState({ x: window.innerWidth - 370, y: 80 });
   const [chatSize, setChatSize] = useState({ width: 350, height: 500 });
+  
+  // Password and host controls state
+  const [meetingPassword, setMeetingPassword] = useState("");
+  const [isLocked, setIsLocked] = useState(false);
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [isHost, setIsHost] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(null); // socketId of user to remove
+  const [showMeetingPassword, setShowMeetingPassword] = useState(false);
+  const [revealedPassword, setRevealedPassword] = useState(""); // Store the actual password from backend
+  const [showRevealedPassword, setShowRevealedPassword] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [userPings, setUserPings] = useState({});
   const [selfPing, setSelfPing] = useState(null);
+  const [hearAll, setHearAll] = useState(false); // Hear all participants regardless of slide
+  const [speakingUsers, setSpeakingUsers] = useState({}); // Track who is speaking
+  const audioAnalyzersRef = useRef({}); // Store audio analyzers for each participant
+  const remoteAudioRefs = useRef({}); // Store remote audio elements for muting during screen share
+  const remoteVideoRefs = useRef({}); // Store remote video elements for muting during screen share
+
+  // Screen share overlay controls — keyed by participant ID for independent state
+  const [screenState, setScreenState] = useState({});
+  const controlsTimeoutRef = useRef({});
+  const wasFullscreenRef = useRef(false);
+  const controlsStateRef = useRef({});
+
+  // Reactive mobile detection (updates on resize/rotation)
+  const [isMobileState, setIsMobileState] = useState(window.innerWidth < 768);
 
   const code = window.location.pathname.split("/").pop();
 
@@ -122,6 +306,159 @@ export default function Meeting() {
     setTimeout(() => playSound(523.25, 0.15), 80); // C5
   };
 
+  // Audio detection for speaking indicator
+  const setupAudioDetection = (stream, userId) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioSource = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      audioSource.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      // Debouncing variables
+      let lastSpeakingState = false;
+      let speakingStartTime = 0;
+      let silenceStartTime = 0;
+      const SPEAKING_THRESHOLD = 20; // Audio level threshold
+      const MIN_SPEAKING_DURATION = 200; // Must speak for 200ms to trigger
+      const MIN_SILENCE_DURATION = 300; // Must be silent for 300ms to stop
+
+      // Store analyzer for cleanup
+      audioAnalyzersRef.current[userId] = { audioContext, analyser };
+
+      const checkAudioLevel = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+        
+        const currentTime = Date.now();
+        const isCurrentlySpeaking = average > SPEAKING_THRESHOLD;
+        
+        // Debounce logic to prevent flickering
+        if (isCurrentlySpeaking && !lastSpeakingState) {
+          // Started speaking
+          if (speakingStartTime === 0) {
+            speakingStartTime = currentTime;
+          } else if (currentTime - speakingStartTime >= MIN_SPEAKING_DURATION) {
+            // Confirmed speaking after minimum duration
+            lastSpeakingState = true;
+            silenceStartTime = 0;
+            
+            setSpeakingUsers(prev => {
+              if (prev[userId] !== true) {
+                // Broadcast speaking status to other users (only for self)
+                if (userId === 'self' && socketRef.current) {
+                  socketRef.current.emit('speaking-status-changed', {
+                    roomCode: code.toUpperCase(),
+                    isSpeaking: true
+                  });
+                }
+                return { ...prev, [userId]: true };
+              }
+              return prev;
+            });
+          }
+        } else if (!isCurrentlySpeaking && lastSpeakingState) {
+          // Started silence
+          if (silenceStartTime === 0) {
+            silenceStartTime = currentTime;
+          } else if (currentTime - silenceStartTime >= MIN_SILENCE_DURATION) {
+            // Confirmed silence after minimum duration
+            lastSpeakingState = false;
+            speakingStartTime = 0;
+            
+            setSpeakingUsers(prev => {
+              if (prev[userId] !== false) {
+                // Broadcast speaking status to other users (only for self)
+                if (userId === 'self' && socketRef.current) {
+                  socketRef.current.emit('speaking-status-changed', {
+                    roomCode: code.toUpperCase(),
+                    isSpeaking: false
+                  });
+                }
+                return { ...prev, [userId]: false };
+              }
+              return prev;
+            });
+          }
+        } else if (isCurrentlySpeaking && lastSpeakingState) {
+          // Continue speaking - reset silence timer
+          silenceStartTime = 0;
+        } else if (!isCurrentlySpeaking && !lastSpeakingState) {
+          // Continue silence - reset speaking timer
+          speakingStartTime = 0;
+        }
+
+        // Continue checking
+        if (audioAnalyzersRef.current[userId]) {
+          requestAnimationFrame(checkAudioLevel);
+        }
+      };
+
+      checkAudioLevel();
+    } catch (err) {
+      console.error('Error setting up audio detection:', err);
+    }
+  };
+
+  // Cleanup audio analyzer
+  const cleanupAudioDetection = (userId) => {
+    if (audioAnalyzersRef.current[userId]) {
+      try {
+        audioAnalyzersRef.current[userId].audioContext.close();
+      } catch (err) {
+        console.error('Error closing audio context:', err);
+      }
+      delete audioAnalyzersRef.current[userId];
+    }
+    setSpeakingUsers(prev => {
+      const updated = { ...prev };
+      delete updated[userId];
+      return updated;
+    });
+  };
+
+  // Inject custom scrollbar styles
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.innerHTML = scrollbarStyles;
+    document.head.appendChild(styleElement);
+    
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
+
+  // Auto-hide footer after 4 seconds of inactivity
+  useEffect(() => {
+    const startTimer = () => {
+      clearTimeout(footerTimerRef.current);
+      footerTimerRef.current = setTimeout(() => {
+        setFooterVisible(false);
+      }, 4000);
+    };
+
+    // Start the initial timer
+    startTimer();
+
+    // Reset timer only on touch and keyboard — NOT mouse movement
+    const resetTimer = () => {
+      setFooterVisible(true);
+      startTimer();
+    };
+
+    window.addEventListener('touchstart', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+
+    return () => {
+      clearTimeout(footerTimerRef.current);
+      window.removeEventListener('touchstart', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+    };
+  }, []);
+
   // Fetch current user info on mount
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -135,7 +472,10 @@ export default function Meeting() {
 
         const userData = await authAPI.getProfile();
         console.log("✅ Fetched current user:", userData.data || userData);
-        setCurrentUser(userData.data || userData);
+        const user = userData.data || userData;
+        setCurrentUser(user);
+        currentUserRef.current = user;
+        setIsUserReady(true);
       } catch (err) {
         console.error("Error fetching user profile:", err);
         navigate("/");
@@ -191,6 +531,16 @@ export default function Meeting() {
       }
     };
   }, [isTimerRunning, code]);
+
+  // Get initials from name
+  const getInitials = (name) => {
+    return name
+      ?.split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2) || "U";
+  };
 
   // Format timer display (HH:MM:SS)
   const formatTimer = (seconds) => {
@@ -257,10 +607,14 @@ export default function Meeting() {
     }));
   }, [remoteStreams]);
 
+  // Keep ref in sync with state — used by socket effect to avoid re-running it on name changes
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   useEffect(() => {
     // Don't start socket connection until we have current user
-    if (!currentUser) return;
-
+    if (!currentUserRef.current) return;
     // Connect to socket.io through the same origin (will use proxy)
     socketRef.current = io(SOCKET_URL || undefined, {
       path: '/socket.io',
@@ -280,7 +634,7 @@ export default function Meeting() {
 
     socket.on("error", (error) => {
       console.error("❌ Socket error:", error);
-      setError(error.message || "Failed to connect to meeting");
+      setError(error.message || "Failed to connect to assembly");
       setIsLoading(false);
     });
 
@@ -305,14 +659,18 @@ export default function Meeting() {
           videoRef.current.srcObject = media;
         }
         updateStream(media);
+        
+        // Set up audio detection for self
+        setupAudioDetection(media, 'self');
+        
         setIsLoading(false);
 
         // Join the room with user info
         const userInfo = {
-          userId: currentUser.id || currentUser._id,
-          name: currentUser.name,
-          username: currentUser.username,
-          profilePic: currentUser.profilePic || ""
+          userId: currentUserRef.current.id || currentUserRef.current._id,
+          name: currentUserRef.current.name,
+          username: currentUserRef.current.username,
+          profilePic: currentUserRef.current.profilePic || ""
         };
         
         // Normalize room code to uppercase for consistency with backend
@@ -322,13 +680,27 @@ export default function Meeting() {
         try {
           const sessionRes = await sessionAPI.getSession(normalizedCode);
           if (!sessionRes || !sessionRes.data) {
-            setError("Meeting session not found");
+            setError("Assembly session not found");
             setIsLoading(false);
             return;
           }
+          
+          // Check if user is host
+          const session = sessionRes.data;
+          const isUserHost = session.hostId._id === (currentUserRef.current.id || currentUserRef.current._id) || 
+                            session.hostId === (currentUserRef.current.id || currentUserRef.current._id);
+          setIsHost(isUserHost);
+          setIsLocked(session.isLocked || false);
+          
+          // If host and meeting is locked, store the password
+          if (isUserHost && session.isLocked && session.password) {
+            setRevealedPassword(session.password);
+          }
+          
+          console.log("Session info:", { isHost: isUserHost, isLocked: session.isLocked });
         } catch (sessionErr) {
           console.error("Session verification failed:", sessionErr);
-          setError(sessionErr.message || "Meeting session not found or has ended");
+          setError(sessionErr.message || "Assembly session not found or has ended");
           setIsLoading(false);
           return;
         }
@@ -379,9 +751,6 @@ export default function Meeting() {
               [socketId]: { isCameraOn, isMicOn, isScreenSharing }
             }));
             
-            // Measure ping for existing user
-            measurePing(socketId);
-            
             if (peersRef.current[socketId]) {
               console.log("⚠️ Peer already exists for:", socketId);
               return;
@@ -412,7 +781,7 @@ export default function Meeting() {
           
           console.log("🟢 User joined:", socketId, userInfo);
           
-          showNotification(`${userInfo.name} joined the meeting`, "success");
+          showNotification(`${userInfo.name} joined the assembly`, "success");
           playJoinSound(); // Play join sound
           
           // Store participant info
@@ -426,9 +795,6 @@ export default function Meeting() {
             ...prev,
             [socketId]: { isCameraOn, isMicOn, isScreenSharing }
           }));
-          
-          // Initialize ping for new user
-          measurePing(socketId);
           
           // If we're currently screen sharing, send our screen share to the new user
           // Use refs instead of state to avoid stale closure issues
@@ -457,13 +823,33 @@ export default function Meeting() {
                   parameters.encodings[0].degradationPreference = 'maintain-framerate';
                 }
                 sender.setParameters(parameters)
-                  .then(() => console.log("✅ Screen share bitrate limited to 800 kbps for new user:", socketId))
-                  .catch(err => console.error("❌ Error setting bitrate:", err));
+                  .then(() => console.log("✅ Screen share video bitrate set to 2.5 Mbps for new user:", socketId))
+                  .catch(err => console.error("❌ Error setting video bitrate:", err));
+              }
+              // AUDIO QUALITY IMPROVEMENT: Increase audio bitrate for screen share
+              if (sender.track && sender.track.kind === 'audio') {
+                const parameters = sender.getParameters();
+                if (!parameters.encodings) {
+                  parameters.encodings = [{}];
+                }
+                // Set high bitrate for screen share audio (music, videos)
+                parameters.encodings[0].maxBitrate = 128000; // 128 kbps for high quality audio
+                sender.setParameters(parameters)
+                  .then(() => console.log("✅ Screen share audio bitrate set to 128 kbps for new user:", socketId))
+                  .catch(err => console.error("❌ Error setting audio bitrate:", err));
               }
             });
             
             try {
               const offer = await screenPeer.createOffer();
+              
+              // AUDIO QUALITY IMPROVEMENT: Enable stereo and high bitrate in SDP
+              offer.sdp = offer.sdp.replace(
+                /useinbandfec=1/g,
+                "useinbandfec=1; stereo=1; maxaveragebitrate=128000"
+              );
+              console.log("✅ SDP modified for stereo audio and high bitrate");
+              
               await screenPeer.setLocalDescription(offer);
               console.log("📤 Sending screen share offer to new user:", socketId);
               socketRef.current.emit("screen-offer", { 
@@ -752,8 +1138,11 @@ export default function Meeting() {
           
           console.log("🔴 User left:", socketId, userInfo);
           
-          showNotification(`${userInfo?.name || "A participant"} left the meeting`, "info");
+          showNotification(`${userInfo?.name || "A participant"} left the assembly`, "info");
           playLeaveSound(); // Play leave sound
+          
+          // Clean up audio detection
+          cleanupAudioDetection(socketId);
           
           // Remove participant info
           setParticipants(prev => {
@@ -800,14 +1189,13 @@ export default function Meeting() {
           }
         });
 
-        // Ping response handler
-        socket.on("ping", ({ from }) => {
-          // Immediately respond to ping
-          socket.emit("ping-response", { to: from });
-        });
-
-        socket.on("ping-response", ({ from }) => {
-          // This will be handled by the measurePing callback
+        // Listen for ping broadcasts from other users
+        socket.on("user-ping-update", ({ socketId, ping }) => {
+          console.log("📡 Received ping update:", socketId, ping);
+          setUserPings(prev => ({
+            ...prev,
+            [socketId]: ping
+          }));
         });
 
         // Listen for media status changes from other participants
@@ -817,6 +1205,35 @@ export default function Meeting() {
             ...prev,
             [socketId]: { isCameraOn, isMicOn, isScreenSharing }
           }));
+        });
+
+        // Listen for speaking status changes from other participants
+        socket.on("user-speaking-status-changed", ({ socketId, isSpeaking }) => {
+          console.log("🎤 Speaking status changed:", socketId, isSpeaking);
+          setSpeakingUsers(prev => ({
+            ...prev,
+            [socketId]: isSpeaking
+          }));
+        });
+
+        // Listen for real-time name/profilePic updates from other participants
+        socket.on("user-info-updated", ({ socketId, name, profilePic }) => {
+          console.log("✏️ User info updated:", socketId, name);
+          setParticipants(prev => {
+            if (!prev[socketId]) return prev;
+            return {
+              ...prev,
+              [socketId]: { ...prev[socketId], name, profilePic }
+            };
+          });
+          // If it's our own update, refresh currentUser display
+          if (socketId === socket.id) {
+            setCurrentUser(prev => {
+              const updated = prev ? { ...prev, name, profilePic } : prev;
+              currentUserRef.current = updated;
+              return updated;
+            });
+          }
         });
 
         // Listen for screen share started
@@ -875,6 +1292,46 @@ export default function Meeting() {
           setRemoteStreams(prev => {
             const updated = { ...prev };
             delete updated[screenSocketId];
+            return updated;
+          });
+        });
+
+        // Listen for being removed from meeting
+        socket.on("removed-from-meeting", ({ message }) => {
+          console.log("🚫 Removed from assembly:", message);
+          showNotification(message, "error");
+          
+          // Disconnect and leave
+          setTimeout(() => {
+            leaveMeeting();
+          }, 2000);
+        });
+
+        // Listen for participant removed (for other participants)
+        socket.on("participant-removed", ({ socketId }) => {
+          console.log("🚫 Participant removed:", socketId);
+          
+          // Remove participant
+          setParticipants(prev => {
+            const updated = { ...prev };
+            delete updated[socketId];
+            return updated;
+          });
+          
+          // Close peer connection
+          if (peersRef.current[socketId]) {
+            try {
+              peersRef.current[socketId].close();
+            } catch (e) {
+              console.error("Error closing peer:", e);
+            }
+            delete peersRef.current[socketId];
+          }
+          
+          // Remove from remote streams
+          setRemoteStreams(prev => {
+            const updated = { ...prev };
+            delete updated[socketId];
             return updated;
           });
         });
@@ -1100,18 +1557,18 @@ export default function Meeting() {
       } catch (err) {
         console.error("Error accessing media devices:", err);
         
-        let errorMessage = "Could not access camera/microphone. ";
+        let errorMessage = "Unable to access your camera and microphone. ";
         
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-          errorMessage += "Please allow camera and microphone permissions and try again.";
+          errorMessage += "Grant permission to continue. Don't worry about camera and mic, both will remain disabled until you turn them on.";
         } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-          errorMessage += "No camera or microphone found on this device.";
+          errorMessage += "No camera or microphone detected on your device.";
         } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-          errorMessage += "Camera or microphone is already in use by another application.";
+          errorMessage += "Your camera or microphone is currently being used by another application.";
         } else if (err.name === "OverconstrainedError") {
-          errorMessage += "Camera or microphone constraints could not be satisfied.";
+          errorMessage += "Your device doesn't meet the required media constraints.";
         } else {
-          errorMessage += "Please check your device settings and try again.";
+          errorMessage += "Verify your device settings and try again.";
         }
         
         setError(errorMessage);
@@ -1136,7 +1593,7 @@ export default function Meeting() {
         socket.disconnect();
       }
     };
-  }, [currentUser]);
+  }, [isUserReady]);
 
   function createPeer(remoteId, media, socket) {
     console.log("🔧 Creating peer connection for:", remoteId);
@@ -1236,6 +1693,12 @@ export default function Meeting() {
       console.log("🎥 Remote stream:", remoteStream?.id, "Tracks:", remoteStream?.getTracks().length);
       
       if (remoteStream) {
+        // Set up audio detection for this stream
+        const hasAudio = remoteStream.getAudioTracks().length > 0;
+        if (hasAudio) {
+          setupAudioDetection(remoteStream, remoteId);
+        }
+        
         // Force a state update by using a callback
         setRemoteStreams(prev => {
           console.log("📺 Updating remote streams, adding:", remoteId);
@@ -1615,34 +2078,52 @@ export default function Meeting() {
         
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
-            cursor: "always",
-            displaySurface: "monitor",
-            width: { ideal: 1920, max: 1920 },     // Full HD
-            height: { ideal: 1080, max: 1080 },    // Full HD
-            frameRate: { ideal: 30, max: 60 }      // Smooth 30 FPS, up to 60 FPS
+            frameRate: { ideal: 30, max: 60 },
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 }
           },
           audio: {
             echoCancellation: false,
             noiseSuppression: false,
-            autoGainControl: false
+            autoGainControl: false,
+            suppressLocalAudioPlayback: true, // Prevent browser from re-capturing meeting audio
+            sampleRate: 48000,
+            channelCount: 2,
+            latency: 0
           }
         });
         
-        console.log("🎵 Screen stream tracks:", screenStream.getTracks().map(t => ({ kind: t.kind, id: t.id, label: t.label })));
+        console.log("🎵 Screen stream obtained");
+        console.log("🎵 Screen stream tracks:", screenStream.getTracks().map(t => ({ 
+          kind: t.kind, 
+          id: t.id, 
+          label: t.label,
+          enabled: t.enabled,
+          readyState: t.readyState
+        })));
         
         const screenAudioTrack = screenStream.getAudioTracks()[0];
         console.log("🎵 Screen audio track available:", !!screenAudioTrack);
-        
-        // Add microphone audio to screen share stream
-        if (stream) {
-          const micAudioTrack = stream.getAudioTracks()[0];
-          if (micAudioTrack) {
-            console.log("🎤 Adding microphone audio to screen share");
-            screenStream.addTrack(micAudioTrack.clone());
-          }
+        if (screenAudioTrack) {
+          console.log("🎵 Screen audio track details:", {
+            id: screenAudioTrack.id,
+            label: screenAudioTrack.label,
+            enabled: screenAudioTrack.enabled,
+            readyState: screenAudioTrack.readyState,
+            muted: screenAudioTrack.muted
+          });
         }
         
-        console.log("🎵 Final screen stream tracks:", screenStream.getTracks().map(t => ({ kind: t.kind, id: t.id, label: t.label })));
+        // DO NOT add mic to screen stream — mic is sent via normal WebRTC stream only
+        // Remote audio is NOT muted — user must still hear participants.
+        // suppressLocalAudioPlayback prevents the browser from looping captured audio back.
+        
+        console.log("🎵 Final screen stream tracks:", screenStream.getTracks().map(t => ({ 
+          kind: t.kind, 
+          id: t.id, 
+          label: t.label,
+          enabled: t.enabled 
+        })));
         
         screenStreamRef.current = screenStream;
         const screenSocketId = `${socketRef.current.id}-screen`;
@@ -1709,13 +2190,33 @@ export default function Meeting() {
                 parameters.encodings[0].degradationPreference = 'maintain-framerate';
               }
               sender.setParameters(parameters)
-                .then(() => console.log("✅ Screen share bitrate limited to 800 kbps for:", peerId))
-                .catch(err => console.error("❌ Error setting bitrate:", err));
+                .then(() => console.log("✅ Screen share video bitrate set to 2.5 Mbps for:", peerId))
+                .catch(err => console.error("❌ Error setting video bitrate:", err));
+            }
+            // AUDIO QUALITY IMPROVEMENT: Increase audio bitrate for screen share
+            if (sender.track && sender.track.kind === 'audio') {
+              const parameters = sender.getParameters();
+              if (!parameters.encodings) {
+                parameters.encodings = [{}];
+              }
+              // Set high bitrate for screen share audio (music, videos)
+              parameters.encodings[0].maxBitrate = 128000; // 128 kbps for high quality audio
+              sender.setParameters(parameters)
+                .then(() => console.log("✅ Screen share audio bitrate set to 128 kbps for:", peerId))
+                .catch(err => console.error("❌ Error setting audio bitrate:", err));
             }
           });
           
           try {
             const offer = await screenPeer.createOffer();
+            
+            // AUDIO QUALITY IMPROVEMENT: Enable stereo and high bitrate in SDP
+            offer.sdp = offer.sdp.replace(
+              /useinbandfec=1/g,
+              "useinbandfec=1; stereo=1; maxaveragebitrate=128000"
+            );
+            console.log("✅ SDP modified for stereo audio and high bitrate");
+            
             await screenPeer.setLocalDescription(offer);
             console.log("📤 Sending screen share offer to:", peerId);
             socketRef.current.emit("screen-offer", { 
@@ -1733,7 +2234,15 @@ export default function Meeting() {
         setIsScreenSharing(true);
         
         if (screenAudioTrack) {
-          showNotification("Screen sharing started with audio", "success");
+          // Detect if user shared entire screen (vs a tab) — entire screen captures meeting audio
+          const trackLabel = screenAudioTrack.label?.toLowerCase() || '';
+          const isEntireScreen = trackLabel.includes('screen') || trackLabel.includes('monitor') || trackLabel.includes('display');
+          
+          if (isEntireScreen) {
+            showNotification("⚠️ For echo-free audio, share a Chrome Tab instead of Entire Screen", "info");
+          } else {
+            showNotification("Screen sharing started with audio", "success");
+          }
         } else {
           showNotification("Screen sharing started (no system audio)", "info");
         }
@@ -2070,7 +2579,7 @@ export default function Meeting() {
 
 
   const leaveMeeting = async () => {
-    console.log("🚪 Leaving meeting, saving duration:", sessionTimer);
+    console.log("🚪 Leaving assembly, saving duration:", sessionTimer);
     
     // Stop all media tracks
     if (stream) {
@@ -2106,6 +2615,75 @@ export default function Meeting() {
     navigate("/home");
   };
 
+  // Handle profile update from Settings modal — updates local state and broadcasts to room
+  const handleProfileUpdate = (updatedUser) => {
+    setCurrentUser(updatedUser);
+    currentUserRef.current = updatedUser;
+    if (socketRef.current) {
+      socketRef.current.emit("update-user-info", {
+        roomCode: code.toUpperCase(),
+        name: updatedUser.name,
+        profilePic: updatedUser.profilePic || ""
+      });
+    }
+  };
+
+  // Password management handlers
+  const handleSetPassword = async () => {
+    if (!meetingPassword.trim()) {
+      setPasswordError("Password cannot be empty");
+      return;
+    }
+    
+    try {
+      await sessionAPI.setPassword(code.toUpperCase(), meetingPassword);
+      setIsLocked(true);
+      setShowPasswordInput(false);
+      setRevealedPassword(meetingPassword); // Store the password
+      setMeetingPassword("");
+      setPasswordError("");
+      setShowMeetingPassword(false);
+      showNotification("Assembly locked with password", "success");
+    } catch (err) {
+      console.error("Error setting password:", err);
+      setPasswordError(err.message || "Failed to set password");
+    }
+  };
+
+  const handleRemovePassword = async () => {
+    try {
+      await sessionAPI.removePassword(code.toUpperCase());
+      setIsLocked(false);
+      setMeetingPassword("");
+      setRevealedPassword(""); // Clear stored password
+      setShowRevealedPassword(false);
+      showNotification("Assembly password removed", "success");
+    } catch (err) {
+      console.error("Error removing password:", err);
+      showNotification("Failed to remove password", "error");
+    }
+  };
+
+  // Remove participant handler
+  const handleRemoveParticipant = async (socketId) => {
+    if (!socketRef.current) return;
+    
+    try {
+      // Emit socket event to remove participant
+      socketRef.current.emit("remove-participant", {
+        roomCode: code.toUpperCase(),
+        socketId: socketId,
+        hostId: currentUser.id || currentUser._id
+      });
+      
+      setShowRemoveConfirm(null);
+      showNotification("Participant removed", "success");
+    } catch (err) {
+      console.error("Error removing participant:", err);
+      showNotification("Failed to remove participant", "error");
+    }
+  };
+
   const sendMessage = () => {
     if (!newMessage.trim() || !socketRef.current) return;
     
@@ -2137,33 +2715,7 @@ export default function Meeting() {
   };
 
   // Measure ping/latency to a specific user
-  const measurePing = (socketId) => {
-    if (!socketRef.current) return;
-    
-    const startTime = Date.now();
-    
-    // Set up one-time listener for ping response
-    const responseHandler = ({ from }) => {
-      if (from === socketId) {
-        const latency = Date.now() - startTime;
-        setUserPings(prev => ({
-          ...prev,
-          [socketId]: latency
-        }));
-        socketRef.current.off("ping-response", responseHandler);
-      }
-    };
-    
-    socketRef.current.on("ping-response", responseHandler);
-    socketRef.current.emit("ping-request", { to: socketId });
-    
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      socketRef.current.off("ping-response", responseHandler);
-    }, 5000);
-  };
-
-  // Measure ping to server (for self)
+  // Measure ping to server (for self) and broadcast to others
   const measureSelfPing = () => {
     if (!socketRef.current) return;
     
@@ -2171,26 +2723,27 @@ export default function Meeting() {
     socketRef.current.emit("ping-server", {}, () => {
       const latency = Date.now() - startTime;
       setSelfPing(latency);
+      
+      // Broadcast my ping to all other participants
+      socketRef.current.emit("broadcast-ping", {
+        roomCode: code.toUpperCase(),
+        ping: latency
+      });
     });
   };
 
   // Periodically update pings for all users
   useEffect(() => {
     const pingInterval = setInterval(() => {
-      // Measure ping to server
+      // Measure ping to server and broadcast
       measureSelfPing();
-      
-      // Measure ping to other users
-      Object.keys(participants).forEach(socketId => {
-        measurePing(socketId);
-      });
     }, 5000); // Update every 5 seconds
 
     // Initial measurement
     measureSelfPing();
 
     return () => clearInterval(pingInterval);
-  }, [participants]);
+  }, []);
 
   // Reset chat position to default
   const resetChatPosition = () => {
@@ -2341,48 +2894,42 @@ export default function Meeting() {
 
   // Helper function to build participants list consistently
   const buildParticipantsList = () => {
-    return [
+    // Build list of regular participants (no screen shares as separate items)
+    const regularParticipants = [
       { 
         id: 'self', 
         name: currentUser?.name || "You", 
+        profilePic: currentUser?.profilePic || "",
         isSelf: true,
-        stream: stream
+        stream: stream,
+        screenStream: isScreenSharing && screenStreamRef.current ? screenStreamRef.current : null
       },
-      // Add own screen share if sharing
-      ...(isScreenSharing && screenStreamRef.current ? [{
-        id: 'self-screen',
-        stream: screenStreamRef.current,
-        name: `${currentUser?.name || "Your"}'s Screen`,
-        isSelf: true,
-        isScreenShare: true
-      }] : []),
-      ...Object.entries(remoteStreams).map(([userId, remoteStream]) => ({
-        id: userId,
-        stream: remoteStream,
-        name: participants[userId]?.name || `User ${userId.substring(0, 6)}`,
-        isSelf: false,
-        isScreenShare: userId.endsWith('-screen')
-      }))
+      ...Object.entries(remoteStreams)
+        .filter(([userId]) => !userId.endsWith('-screen')) // Exclude screen share streams
+        .map(([userId, remoteStream]) => {
+          // Find matching screen share stream for this user
+          const screenShareId = `${userId}-screen`;
+          const screenStream = remoteStreams[screenShareId] || null;
+          
+          return {
+            id: userId,
+            stream: remoteStream,
+            name: participants[userId]?.name || `User ${userId.substring(0, 6)}`,
+            profilePic: participants[userId]?.profilePic || "",
+            isSelf: false,
+            screenStream: screenStream
+          };
+        })
     ];
+    
+    return regularParticipants;
   };
 
   // Helper function to calculate total slides consistently
   const calculateTotalSlides = () => {
     const allParticipants = buildParticipantsList();
-    
-    // Get all screen shares (support multiple)
-    const screenShareParticipants = allParticipants.filter(p => p.isScreenShare);
-    const nonScreenParticipants = allParticipants.filter(p => !p.isScreenShare);
-    
-    if (screenShareParticipants.length > 0) {
-      // Screen shares on first slides (1 per slide), then 2 users per slide
-      const screenShareSlides = screenShareParticipants.length;
-      const userSlides = Math.ceil(nonScreenParticipants.length / 2);
-      return screenShareSlides + userSlides;
-    } else {
-      // 2 users per slide
-      return Math.ceil(allParticipants.length / 2);
-    }
+    // 2 users per slide (screen shares are now part of user containers)
+    return Math.ceil(allParticipants.length / 2);
   };
 
   // Slide navigation functions
@@ -2422,7 +2969,7 @@ export default function Meeting() {
       // Alt + L = Leave meeting
       if (e.altKey && e.key === 'l') {
         e.preventDefault();
-        if (confirm('Are you sure you want to leave the meeting?')) {
+        if (confirm('Are you sure you want to leave the assembly?')) {
           leaveMeeting();
         }
       }
@@ -2454,6 +3001,69 @@ export default function Meeting() {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [stream, isCameraOn, isMicOn, showParticipants, showChat, currentSlide]);
+
+  // Automatic audio device switching for screen share audio
+  useEffect(() => {
+    // Function to update audio output device for all screen share video elements
+    const updateAudioOutputDevice = async () => {
+      try {
+        // Get all video elements that have screen share audio
+        const videoElements = document.querySelectorAll('video[data-is-screen-share-audio="true"]');
+        
+        if (videoElements.length === 0) return;
+        
+        // Get the default audio output device
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+        
+        console.log("🔊 Available audio output devices:", audioOutputs.length);
+        
+        // Find the default or first available audio output
+        const defaultDevice = audioOutputs.find(d => d.deviceId === 'default') || audioOutputs[0];
+        
+        if (!defaultDevice) {
+          console.log("⚠️ No audio output device found");
+          return;
+        }
+        
+        console.log("🔊 Switching screen share audio to device:", defaultDevice.label || defaultDevice.deviceId);
+        
+        // Update sinkId for all screen share video elements
+        for (const videoEl of videoElements) {
+          if (typeof videoEl.setSinkId === 'function') {
+            try {
+              await videoEl.setSinkId(defaultDevice.deviceId);
+              console.log("✅ Audio output switched for screen share video");
+            } catch (err) {
+              console.error("❌ Error setting sinkId:", err);
+            }
+          } else {
+            console.log("⚠️ setSinkId not supported in this browser");
+          }
+        }
+      } catch (err) {
+        console.error("❌ Error updating audio output device:", err);
+      }
+    };
+    
+    // Listen for device changes (when user connects/disconnects Bluetooth, headphones, etc.)
+    const handleDeviceChange = () => {
+      console.log("🔊 Audio device changed, updating output...");
+      // Small delay to ensure device is ready
+      setTimeout(updateAudioOutputDevice, 500);
+    };
+    
+    // Add event listener for device changes
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    
+    // Initial setup - update devices when component mounts or remote streams change
+    updateAudioOutputDevice();
+    
+    // Cleanup
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [remoteStreams]); // Re-run when remote streams change (new screen shares)
 
   // Helper function to handle video ref assignment
   const handleVideoRef = (el, participant) => {
@@ -2498,6 +3108,9 @@ export default function Meeting() {
       }
     } else {
       // Remote participant (including remote screen shares)
+      if (!participant.id.endsWith('-screen')) {
+        remoteVideoRefs.current[participant.id] = el;
+      }
       if (participant.stream) {
         const needsUpdate = el.srcObject !== participant.stream;
         
@@ -2520,6 +3133,10 @@ export default function Meeting() {
         if (participant.isScreenShare || participant.id.endsWith('-screen')) {
           console.log("🎬 Ensuring screen share video is playing");
           el.muted = false; // Remote screen shares should have audio
+          el.volume = 1.0; // Boost volume to 3x for louder system audio
+          
+          // Mark this element as a screen share audio element for device switching
+          el.dataset.isScreenShareAudio = 'true';
           
           // Check if video is paused and play it
           if (el.paused) {
@@ -2543,6 +3160,114 @@ export default function Meeting() {
       }
     }
   };
+
+  // Screen share overlay control handlers
+
+  // Helper: get state for one screen (with defaults)
+  const getScreen = (id) => ({
+    showControls: false, isPlaying: true, isMuted: false, isFullscreen: false,
+    ...(screenState[id] || {})
+  });
+
+  // Helper: update state for one screen
+  const updateScreen = (id, patch) => {
+    setScreenState(prev => ({ ...prev, [id]: { ...getScreen(id), ...prev[id], ...patch } }));
+    // Also keep ref in sync for DOM restore
+    controlsStateRef.current[id] = { ...getScreen(id), ...controlsStateRef.current[id], ...patch };
+  };
+
+  // Sync React state → video DOM for a specific screen
+  const syncVideoState = (id) => {
+    const video = document.getElementById(`screen-video-${id}`);
+    const container = document.getElementById(`screen-container-${id}`);
+    if (!video) return;
+    const state = controlsStateRef.current[id] || { isPlaying: true, isMuted: false, isFullscreen: false };
+    video.muted = state.isMuted;
+    if (state.isPlaying) video.play().catch(() => {});
+    else video.pause();
+    if (state.isFullscreen && container && !document.fullscreenElement) {
+      container.requestFullscreen?.().catch(() => {});
+    }
+  };
+
+  const handleScreenTap = (id) => {
+    const current = getScreen(id);
+    if (current.showControls) {
+      updateScreen(id, { showControls: false });
+      clearTimeout(controlsTimeoutRef.current[id]);
+      return;
+    }
+    updateScreen(id, { showControls: true });
+    clearTimeout(controlsTimeoutRef.current[id]);
+    controlsTimeoutRef.current[id] = setTimeout(() => updateScreen(id, { showControls: false }), 3000);
+  };
+
+  const togglePlay = (id) => {
+    const video = document.getElementById(`screen-video-${id}`);
+    if (!video) return;
+    if (video.paused) { video.play(); updateScreen(id, { isPlaying: true }); }
+    else { video.pause(); updateScreen(id, { isPlaying: false }); }
+  };
+
+  const toggleMute = (id) => {
+    const video = document.getElementById(`screen-video-${id}`);
+    if (!video) return;
+    video.muted = !video.muted;
+    updateScreen(id, { isMuted: video.muted });
+  };
+
+  const toggleFullscreen = (id) => {
+    const el = document.getElementById(`screen-container-${id}`);
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+      updateScreen(id, { isFullscreen: true });
+    } else {
+      document.exitFullscreen?.();
+      updateScreen(id, { isFullscreen: false });
+    }
+  };
+
+  // Sync fullscreen state from browser events (find which screen is fullscreen by ID)
+  useEffect(() => {
+    const handleFsChange = () => {
+      const isNow = !!document.fullscreenElement;
+      wasFullscreenRef.current = isNow;
+      const el = document.fullscreenElement;
+      if (el) {
+        const id = el.id?.replace("screen-container-", "");
+        if (id) updateScreen(id, { isFullscreen: true });
+      } else {
+        // Exited fullscreen — clear isFullscreen on all screens
+        setScreenState(prev => {
+          const next = { ...prev };
+          Object.keys(next).forEach(id => { next[id] = { ...next[id], isFullscreen: false }; });
+          return next;
+        });
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    document.addEventListener("webkitfullscreenchange", handleFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFsChange);
+      document.removeEventListener("webkitfullscreenchange", handleFsChange);
+    };
+  }, []);
+
+  // Sync video DOM when remote streams update (WebRTC renegotiation)
+  useEffect(() => {
+    Object.keys(controlsStateRef.current).forEach(id => setTimeout(() => syncVideoState(id), 300));
+  }, [remoteStreams]);
+
+  // Restore state after rotation / resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileState(window.innerWidth < 768);
+      Object.keys(controlsStateRef.current).forEach(id => setTimeout(() => syncVideoState(id), 500));
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   return (
     <>
@@ -2572,8 +3297,10 @@ export default function Meeting() {
         color: "white",
         display: "flex",
         flexDirection: "column",
-        padding: window.innerWidth < 768 ? "15px" : "20px",
-        paddingBottom: window.innerWidth < 768 ? "90px" : "100px",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: isMobileState ? "15px" : "20px",
+        paddingBottom: isMobileState ? "90px" : "100px",
         position: "relative",
         overflow: "auto"
       }}>
@@ -2616,28 +3343,159 @@ export default function Meeting() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: "20px"
+          gap: "32px",
+          padding: "clamp(20px, 5vw, 40px)",
+          maxWidth: "500px",
+          width: "90%"
         }}>
+          {/* Animated icon container */}
           <div style={{
-            width: "50px",
-            height: "50px",
-            border: "4px solid rgba(255,255,255,0.3)",
-            borderTop: "4px solid white",
-            borderRadius: "50%",
-            animation: "spin 1s linear infinite"
-          }} />
-          <div style={{ textAlign: "center" }}>
-            <p style={{ fontSize: "18px", marginBottom: "10px" }}>
-              Requesting camera and microphone access...
+            position: "relative",
+            width: "120px",
+            height: "120px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
+            {/* Outer rotating ring */}
+            <div style={{
+              position: "absolute",
+              width: "100%",
+              height: "100%",
+              border: "3px solid transparent",
+              borderTopColor: "#3b82f6",
+              borderRightColor: "#3b82f6",
+              borderRadius: "50%",
+              animation: "spin 1.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite"
+            }} />
+            
+            {/* Middle pulsing ring */}
+            <div style={{
+              position: "absolute",
+              width: "85%",
+              height: "85%",
+              border: "2px solid rgba(59, 130, 246, 0.3)",
+              borderRadius: "50%",
+              animation: "pulse 2s ease-in-out infinite"
+            }} />
+            
+            {/* Inner icon background */}
+            <div style={{
+              position: "relative",
+              width: "70px",
+              height: "70px",
+              background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 8px 32px rgba(59, 130, 246, 0.4)",
+              animation: "float 3s ease-in-out infinite"
+            }}>
+              <Video size={32} strokeWidth={2.5} color="white" />
+            </div>
+          </div>
+
+          {/* Text content */}
+          <div style={{ 
+            textAlign: "center",
+            animation: "fadeIn 0.6s ease-out"
+          }}>
+            <h2 style={{ 
+              fontSize: "clamp(20px, 4vw, 24px)",
+              fontWeight: "600",
+              marginBottom: "12px",
+              background: "linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text"
+            }}>
+              Setting up your workspace
+            </h2>
+            <p style={{ 
+              fontSize: "clamp(14px, 3vw, 16px)", 
+              color: "#94a3b8",
+              lineHeight: "1.6",
+              marginBottom: "8px"
+            }}>
+              Requesting camera and microphone access
             </p>
-            <p style={{ fontSize: "14px", color: "#94a3b8" }}>
-              Please allow permissions in your browser
+            <p style={{ 
+              fontSize: "clamp(12px, 2.5vw, 14px)", 
+              color: "#64748b",
+              lineHeight: "1.5"
+            }}>
+              Your devices will remain off until you enable them
             </p>
           </div>
+
+          {/* Progress dots */}
+          <div style={{
+            display: "flex",
+            gap: "8px",
+            alignItems: "center"
+          }}>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: "#3b82f6",
+                  animation: `dotPulse 1.4s ease-in-out infinite`,
+                  animationDelay: `${i * 0.2}s`
+                }}
+              />
+            ))}
+          </div>
+
           <style>{`
             @keyframes spin {
               0% { transform: rotate(0deg); }
               100% { transform: rotate(360deg); }
+            }
+            
+            @keyframes pulse {
+              0%, 100% { 
+                transform: scale(1);
+                opacity: 0.6;
+              }
+              50% { 
+                transform: scale(1.1);
+                opacity: 0.3;
+              }
+            }
+            
+            @keyframes float {
+              0%, 100% { 
+                transform: translateY(0px);
+              }
+              50% { 
+                transform: translateY(-10px);
+              }
+            }
+            
+            @keyframes fadeIn {
+              from {
+                opacity: 0;
+                transform: translateY(10px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+            
+            @keyframes dotPulse {
+              0%, 100% {
+                transform: scale(1);
+                opacity: 0.5;
+              }
+              50% {
+                transform: scale(1.5);
+                opacity: 1;
+              }
             }
           `}</style>
         </div>
@@ -2646,16 +3504,44 @@ export default function Meeting() {
       {error && (
         <div style={{
           background: "#ef4444",
-          padding: "30px",
+          padding: "clamp(20px, 5vw, 30px)",
           borderRadius: "12px",
           maxWidth: "500px",
+          width: "90%",
           textAlign: "center",
           boxShadow: "0 10px 40px rgba(239, 68, 68, 0.3)"
         }}>
-          <div style={{ fontSize: "48px", marginBottom: "15px" }}>⚠️</div>
-          <h2 style={{ margin: "0 0 15px 0" }}>Access Denied</h2>
-          <p style={{ marginBottom: "20px", lineHeight: "1.6" }}>{error}</p>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+          <div style={{ 
+            display: "flex", 
+            justifyContent: "center", 
+            marginBottom: "15px" 
+          }}>
+            <div style={{
+              background: "rgba(255, 255, 255, 0.2)",
+              borderRadius: "50%",
+              padding: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}>
+              <Lock size={48} strokeWidth={2} />
+            </div>
+          </div>
+          <h2 style={{ 
+            margin: "0 0 15px 0",
+            fontSize: "clamp(20px, 4vw, 24px)"
+          }}>Access Denied</h2>
+          <p style={{ 
+            marginBottom: "20px", 
+            lineHeight: "1.6",
+            fontSize: "clamp(14px, 3vw, 16px)"
+          }}>{error}</p>
+          <div style={{ 
+            display: "flex", 
+            gap: "10px", 
+            justifyContent: "center",
+            flexWrap: "wrap"
+          }}>
             <button
               onClick={() => window.location.reload()}
               style={{
@@ -2666,7 +3552,17 @@ export default function Meeting() {
                 borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "bold",
-                fontSize: "14px"
+                fontSize: "clamp(13px, 2.5vw, 14px)",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                minWidth: "120px"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "none";
               }}
             >
               Try Again
@@ -2681,34 +3577,42 @@ export default function Meeting() {
                 borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "bold",
-                fontSize: "14px"
+                fontSize: "clamp(13px, 2.5vw, 14px)",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                minWidth: "120px"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "none";
               }}
             >
-              Back to Dashboard
+              Back to Home
             </button>
           </div>
         </div>
       )}
 
       {!isLoading && !error && (
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          width: "100%",
-          maxWidth: "1600px",
-          margin: "0 auto",
-          gap: "15px",
-          paddingTop: "10px"
-        }}>
-          {/* Header with Code and Participants */}
+        <>
+          {/* Header with Code and Participants - Fixed to top */}
           <div style={{
+            position: "absolute",
+            top: "20px",
+            left: "20px",
+            right: "20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            width: "100%",
+            width: "calc(100% - 40px)",
+            maxWidth: "1600px",
+            margin: "0 auto",
             flexWrap: "wrap",
-            gap: "15px"
+            gap: "15px",
+            zIndex: 100
           }}>
             {/* Meeting Code with Animation */}
             <div style={{
@@ -2742,7 +3646,7 @@ export default function Meeting() {
                     fontSize: window.innerWidth < 768 ? "14px" : "16px",
                     whiteSpace: "nowrap"
                   }}>
-                    Code: <span style={{ color: "#3b82f6", fontFamily: "monospace" }}>{code}</span>
+                    {window.innerWidth >= 395 && "Code: "}<span style={{ color: "#3b82f6", fontFamily: "monospace" }}>{code}</span>
                   </h3>
                 </div>
                 <div style={{
@@ -2759,7 +3663,7 @@ export default function Meeting() {
                   fontWeight: "600",
                   whiteSpace: "nowrap"
                 }}>
-                  ✓ Code copied!
+                  ✓ {window.innerWidth < 395 ? "Copied!" : "Code copied!"}
                 </div>
               </div>
               <button 
@@ -2770,7 +3674,7 @@ export default function Meeting() {
                     setShowCopied(false);
                   }, 2000);
                 }}
-                title="Copy meeting code"
+                title="Copy assembly code"
                 style={{
                   padding: "8px 12px",
                   borderRadius: "8px",
@@ -2792,29 +3696,85 @@ export default function Meeting() {
               </button>
             </div>
 
-            {/* Participants Count */}
-            <div style={{
-              background: "rgba(255, 255, 255, 0.05)",
-              padding: "10px 16px",
-              borderRadius: "12px",
-              fontSize: "14px",
-              color: "#10b981",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              height: "44px"
-            }}
-            onClick={() => setShowParticipants(!showParticipants)}
-            title="Click to view participants"
-            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)"}
+            {/* Profile Button */}
+            <div
+              onClick={() => setShowProfileSettings(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: (() => {
+                  const name = currentUser?.name || "User";
+                  const isMobile = window.innerWidth < 768;
+                  const nameHidden = isMobile && name.length > 12;
+                  return nameHidden ? "4px" : "4px 16px 4px 4px";
+                })(),
+                background: "rgba(30, 41, 59, 0.6)",
+                backdropFilter: "blur(10px)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "12px",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                height: "44px"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(30, 41, 59, 0.8)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(30, 41, 59, 0.6)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)";
+              }}
+              title="Settings"
             >
-              <Users size={16} />
-              {Object.keys(remoteStreams).filter(id => !id.endsWith('-screen')).length + 1} participant{Object.keys(remoteStreams).filter(id => !id.endsWith('-screen')).length !== 0 ? 's' : ''}
+              <div style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                background: "transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: "600",
+                fontSize: "14px",
+                overflow: "hidden",
+                flexShrink: 0
+              }}>
+                {currentUser?.profilePic ? (
+                  <img
+                    src={currentUser.profilePic}
+                    alt={currentUser.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }}
+                  />
+                ) : (
+                  <span style={{ color: "white" }}>{getInitials(currentUser?.name)}</span>
+                )}
+              </div>
+              {window.innerWidth >= 395 && (
+                <span style={{ fontSize: "14px", fontWeight: "500", color: "white", whiteSpace: "nowrap" }}>
+                  {(() => {
+                    const name = currentUser?.name || "User";
+                    const isMobile = window.innerWidth < 768;
+                    // On mobile, hide name if longer than 12 chars — just show the avatar
+                    if (isMobile && name.length > 12) return null;
+                    return name;
+                  })()}
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Main Content Wrapper */}
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            width: "100%",
+            maxWidth: "1600px",
+            margin: "0 auto",
+            gap: "15px",
+            paddingTop: "80px" // Add padding to account for fixed header
+          }}>
 
           {/* Participants Panel */}
           {showParticipants && (
@@ -2933,13 +3893,13 @@ export default function Meeting() {
                       <div style={{ fontWeight: "bold" }}>{displayName}</div>
                       <div style={{ fontSize: "12px", color: "#94a3b8", display: "flex", alignItems: "center", gap: "5px" }}>
                         {connectionStatus[userId] === "connected" && (
-                          <><span style={{ color: "#10b981" }}>●</span> Connected</>
+                          <><Circle size={8} fill="#10b981" color="#10b981" /> Connected</>
                         )}
                         {connectionStatus[userId] === "connecting" && (
-                          <><span style={{ color: "#f59e0b" }}>●</span> Connecting</>
+                          <><Circle size={8} fill="#f59e0b" color="#f59e0b" /> Connecting</>
                         )}
                         {connectionStatus[userId] === "failed" && (
-                          <><span style={{ color: "#ef4444" }}>●</span> Failed</>
+                          <><Circle size={8} fill="#ef4444" color="#ef4444" /> Failed</>
                         )}
                         {ping !== undefined && connectionStatus[userId] === "connected" && (
                           <span style={{ 
@@ -3078,8 +4038,12 @@ export default function Meeting() {
                 padding: "15px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "12px"
-              }}>
+                gap: "12px",
+                scrollbarWidth: "thin",
+                scrollbarColor: "#475569 #1e293b"
+              }}
+              className="chat-messages-scroll"
+              >
                 {messages.length === 0 ? (
                   <div style={{
                     textAlign: "center",
@@ -3240,36 +4204,138 @@ export default function Meeting() {
                   connectionStatus: connectionStatus[p.id]
                 }));
 
-                const isMobile = window.innerWidth < 768;
+                const isMobile = isMobileState;
+                const participantsPerSlide = 2;
+                const startIndex = currentSlide * participantsPerSlide;
+                const currentParticipants = allParticipants.slice(startIndex, startIndex + participantsPerSlide);
+                const screensharesOnSlide = currentParticipants.filter(p => p.screenStream);
                 
-                // Get all screen shares (support multiple)
-                const screenShareParticipants = allParticipants.filter(p => p.isScreenShare);
-                const nonScreenParticipants = allParticipants.filter(p => !p.isScreenShare);
-                
-                // Mobile: Show all participants stacked vertically (no pagination)
-                // Desktop: Show 2 per slide with pagination, OR screen share layout
+                // Mobile: Show all participants stacked vertically
                 if (isMobile) {
                   return (
                     <div style={{
                       display: "flex",
                       flexDirection: "column",
-                      gap: "12px",
+                      gap: "20px",
                       width: "100%",
-                      maxWidth: allParticipants.length <= 2 ? "600px" : "100%",
                       margin: "0 auto"
                     }}>
-                      {allParticipants.map((participant) => (
-                        <div key={participant.id} style={{ 
+                      {allParticipants.map((participant) => {
+                        const isSpeaking = speakingUsers[participant.id];
+                        const hasScreenShare = !!participant.screenStream;
+                        
+                        return (
+                          <div key={participant.id} style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "12px",
+                            width: "100%"
+                          }}>
+                            {/* Screen Share (if active) - Above user video */}
+                            {hasScreenShare && (
+                              <div
+                                id={`screen-container-${participant.id}`}
+                                onClick={() => handleScreenTap(participant.id)}
+                                style={{
+                                  position: "relative",
+                                  borderRadius: "16px",
+                                  overflow: "hidden",
+                                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                                  border: "2px solid rgba(59, 130, 246, 0.5)",
+                                  width: "100%",
+                                  aspectRatio: "16/9",
+                                  background: "black",
+                                  touchAction: "manipulation",
+                                  cursor: "pointer"
+                                }}>
+                                <video
+                                  id={`screen-video-${participant.id}`}
+                                  key={`screen-${participant.id}`}
+                                  autoPlay
+                                  playsInline
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "contain",
+                                    background: "black",
+                                    display: "block"
+                                  }}
+                                  ref={(el) => {
+                                    if (el && participant.screenStream && el.srcObject !== participant.screenStream) {
+                                      el.srcObject = participant.screenStream;
+                                      el.addEventListener("loadedmetadata", () => setTimeout(() => syncVideoState(participant.id), 200), { once: true });
+                                    }
+                                  }}
+                                />
+                                {/* Overlay controls — always in DOM, shown via CSS class */}
+                                <div className={`screen-controls${getScreen(participant.id).showControls ? " visible" : ""}`} style={{
+                                    position: "absolute",
+                                    inset: 0,
+                                    background: "rgba(0,0,0,0.4)",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    zIndex: 50
+                                  }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); togglePlay(participant.id); }}
+                                        style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                      >
+                                        {getScreen(participant.id).isPlaying ? <Pause size={28} color="white" /> : <Play size={28} color="white" />}
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); toggleMute(participant.id); }}
+                                        style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                      >
+                                        {getScreen(participant.id).isMuted ? <VolumeX size={28} color="white" /> : <Volume2 size={28} color="white" />}
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); toggleFullscreen(participant.id); }}
+                                        style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                      >
+                                        {getScreen(participant.id).isFullscreen ? <Minimize size={28} color="white" /> : <Maximize size={28} color="white" />}
+                                      </button>
+                                    </div>
+                                  </div>
+                                <div style={{
+                                  position: "absolute",
+                                  bottom: "12px",
+                                  left: "12px",
+                                  padding: "8px 16px",
+                                  fontSize: "13px",
+                                  fontWeight: "600",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  color: "white",
+                                  textShadow: "0 2px 8px rgba(0, 0, 0, 0.8)",
+                                  pointerEvents: "none"
+                                }}>
+                                  <Monitor size={14} color="white" />
+                                  <span>{participant.name}'s Screen</span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* User Video */}
+                        <div style={{ 
                           position: "relative",
                           borderRadius: "16px",
                           overflow: "hidden",
-                          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-                          border: participant.isSelf 
-                            ? "2px solid rgba(59, 130, 246, 0.3)" 
-                            : "2px solid rgba(16, 185, 129, 0.3)",
+                          boxShadow: isSpeaking 
+                            ? "0 0 0 3px #10b981, 0 4px 20px rgba(0, 0, 0, 0.3)"
+                            : "0 4px 20px rgba(0, 0, 0, 0.3)",
+                          border: isSpeaking
+                            ? "2px solid #10b981"
+                            : participant.isSelf 
+                              ? "2px solid rgba(59, 130, 246, 0.3)" 
+                              : "2px solid rgba(16, 185, 129, 0.3)",
                           width: "100%",
                           height: "auto",
-                          aspectRatio: "16/9"
+                          aspectRatio: "16/9",
+                          transition: "all 0.3s ease"
                         }}>
                           <video
                             ref={(el) => handleVideoRef(el, participant)}
@@ -3281,9 +4347,71 @@ export default function Meeting() {
                               height: "100%",
                               objectFit: "cover",
                               background: "#1e293b",
-                              transform: (participant.isSelf && !participant.isScreenShare) ? "scaleX(-1)" : "none"
+                              transform: participant.isSelf ? "scaleX(-1)" : "none"
                             }}
                           />
+                          
+                          {/* Profile Picture Overlay - Show when camera is off */}
+                          {((participant.isSelf && !isCameraOn) || 
+                           (!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false))
+                           && (
+                            <>
+                              {/* Sound wave rings when speaking */}
+                              {isSpeaking && (
+                                <>
+                                  <div className="sound-wave" style={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    width: "100px",
+                                    height: "100px",
+                                    borderRadius: "12px",
+                                    border: "3px solid #10b981",
+                                    pointerEvents: "none"
+                                  }} />
+                                  <div className="sound-wave" style={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    width: "100px",
+                                    height: "100px",
+                                    borderRadius: "12px",
+                                    border: "3px solid #10b981",
+                                    pointerEvents: "none",
+                                    animationDelay: "0.5s"
+                                  }} />
+                                </>
+                              )}
+                              
+                              <div style={{
+                              position: "absolute",
+                              top: "50%",
+                              left: "50%",
+                              transform: "translate(-50%, -50%)",
+                              width: "80px",
+                              height: "80px",
+                              borderRadius: "12px",
+                              background: participant.profilePic 
+                                ? `url(${participant.profilePic}) center/cover` 
+                                : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "32px",
+                              fontWeight: "bold",
+                              color: "white",
+                              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+                              border: "2px solid rgba(255, 255, 255, 0.2)"
+                            }}>
+                              {!participant.profilePic && 
+                                participant.name?.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2)
+                              }
+                            </div>
+                            </>
+                          )}
+                          
                           <div style={{
                             position: "absolute",
                             bottom: "12px",
@@ -3299,332 +4427,133 @@ export default function Meeting() {
                             gap: "6px"
                           }}>
                             <span>{participant.name}</span>
-                            {participant.isScreenShare && <Monitor size={10} color="#3b82f6" />}
-                            {participant.isSelf && !participant.isScreenShare && !isCameraOn && <VideoOff size={10} />}
-                            {participant.isSelf && !participant.isScreenShare && !isMicOn && <MicOff size={10} />}
-                            {!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false && !participantMediaStatus[participant.id]?.isScreenSharing && <VideoOff size={10} />}
+                            {participant.isSelf && !isCameraOn && <VideoOff size={10} />}
+                            {participant.isSelf && !isMicOn && <MicOff size={10} />}
+                            {!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false && <VideoOff size={10} />}
                             {!participant.isSelf && participantMediaStatus[participant.id]?.isMicOn === false && <MicOff size={10} />}
                             {!participant.isSelf && participant.connectionStatus === "connected" && (
-                              <span style={{ color: "#10b981", fontSize: "10px" }}>●</span>
+                              <Circle size={8} fill="#10b981" color="#10b981" />
                             )}
                             {!participant.isSelf && participant.connectionStatus === "connecting" && (
-                              <span style={{ color: "#f59e0b", fontSize: "10px" }}>●</span>
+                              <Circle size={8} fill="#f59e0b" color="#f59e0b" />
                             )}
                             {!participant.isSelf && participant.connectionStatus === "failed" && (
-                              <span style={{ color: "#ef4444", fontSize: "10px" }}>●</span>
+                              <Circle size={8} fill="#ef4444" color="#ef4444" />
                             )}
                           </div>
                         </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 }
 
-                // Desktop: Carousel with screen shares on first slides (1 per slide), users on subsequent slides
-                if (screenShareParticipants.length > 0) {
-                  const totalSlides = calculateTotalSlides();
-                  const screenShareSlides = screenShareParticipants.length;
-                  
-                  // First N slides: Show screen shares (1 per slide, centered and smaller)
-                  if (currentSlide < screenShareSlides) {
-                    const screenShareParticipant = screenShareParticipants[currentSlide];
-                    
-                    return (
-                      <>
-                        {/* Centered screen share */}
-                        <div style={{
-                          width: "100%",
-                          maxWidth: "800px",
-                          margin: "0 auto",
-                          display: "flex",
-                          justifyContent: "center",
-                          alignItems: "center"
-                        }}>
-                          <div style={{
-                            position: "relative",
-                            borderRadius: "16px",
-                            overflow: "hidden",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-                            border: "2px solid rgba(59, 130, 246, 0.5)",
-                            aspectRatio: "16/9",
-                            width: "100%"
-                          }}>
+                // Desktop: Carousel with 2 people per slide
+                const totalSlides = calculateTotalSlides();
+
+                return (
+                  <>
+                    {/* Screenshares Section - Above all user containers */}
+                    {screensharesOnSlide.length > 0 && (
+                      <div style={{
+                        width: "100%",
+                        marginBottom: "24px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "16px"
+                      }}>
+                        {screensharesOnSlide.map((participant) => (
+                          <div
+                            id={`screen-container-${participant.id}`}
+                            key={`screen-${participant.id}`}
+                            onClick={() => handleScreenTap(participant.id)}
+                            style={{
+                              position: "relative",
+                              borderRadius: "20px",
+                              overflow: "hidden",
+                              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                              border: "2px solid rgba(59, 130, 246, 0.5)",
+                              width: "100%",
+                              maxWidth: "1000px",
+                              margin: "0 auto",
+                              aspectRatio: "16/9",
+                              background: "black",
+                              cursor: "pointer",
+                              touchAction: "manipulation"
+                            }}>
                             <video
-                              ref={(el) => handleVideoRef(el, screenShareParticipant)}
+                              id={`screen-video-${participant.id}`}
+                              key={`screen-video-${participant.id}`}
                               autoPlay
                               playsInline
-                              controls={false}
-                              style={{ 
-                                width: "100%", 
+                              style={{
+                                width: "100%",
                                 height: "100%",
                                 objectFit: "contain",
-                                background: "#1e293b"
+                                background: "black",
+                                display: "block"
+                              }}
+                              ref={(el) => {
+                                if (el && participant.screenStream && el.srcObject !== participant.screenStream) {
+                                  el.srcObject = participant.screenStream;
+                                  el.addEventListener("loadedmetadata", () => setTimeout(() => syncVideoState(participant.id), 200), { once: true });
+                                }
                               }}
                             />
-                            <div style={{
+                            {/* Overlay controls — always in DOM, shown via CSS class */}
+                            <div className={`screen-controls${getScreen(participant.id).showControls ? " visible" : ""}`} style={{
                               position: "absolute",
-                              bottom: "12px",
-                              left: "12px",
-                              background: "rgba(0, 0, 0, 0.8)",
-                              backdropFilter: "blur(10px)",
-                              padding: "8px 16px",
-                              borderRadius: "8px",
-                              fontSize: "14px",
-                              fontWeight: "500",
+                              inset: 0,
+                              background: "rgba(0,0,0,0.4)",
                               display: "flex",
                               alignItems: "center",
-                              gap: "8px"
+                              justifyContent: "center",
+                              zIndex: 50
                             }}>
-                              <Monitor size={14} color="#3b82f6" />
-                              <span>{screenShareParticipant.name}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); togglePlay(participant.id); }}
+                                  style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >
+                                  {getScreen(participant.id).isPlaying ? <Pause size={28} color="white" /> : <Play size={28} color="white" />}
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleMute(participant.id); }}
+                                  style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >
+                                  {getScreen(participant.id).isMuted ? <VolumeX size={28} color="white" /> : <Volume2 size={28} color="white" />}
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleFullscreen(participant.id); }}
+                                  style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                >
+                                  {getScreen(participant.id).isFullscreen ? <Minimize size={28} color="white" /> : <Maximize size={28} color="white" />}
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-
-                        {/* Navigation Arrows */}
-                        {totalSlides > 1 && (
-                          <>
-                            {/* Left Arrow */}
-                            {currentSlide > 0 && (
-                              <button
-                                onClick={prevSlide}
-                                style={{
-                                  position: "absolute",
-                                  left: "20px",
-                                  top: "50%",
-                                  transform: "translateY(-50%)",
-                                  background: "rgba(30, 41, 59, 0.9)",
-                                  border: "2px solid rgba(255, 255, 255, 0.1)",
-                                  borderRadius: "50%",
-                                  width: "50px",
-                                  height: "50px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                  fontSize: "24px",
-                                  color: "white",
-                                  transition: "all 0.2s",
-                                  zIndex: 10
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = "rgba(59, 130, 246, 0.9)";
-                                  e.currentTarget.style.transform = "translateY(-50%) scale(1.1)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "rgba(30, 41, 59, 0.9)";
-                                  e.currentTarget.style.transform = "translateY(-50%) scale(1)";
-                                }}
-                              >
-                                ‹
-                              </button>
-                            )}
-
-                            {/* Right Arrow */}
-                            {currentSlide < totalSlides - 1 && (
-                              <button
-                                onClick={nextSlide}
-                                style={{
-                                  position: "absolute",
-                                  right: "20px",
-                                  top: "50%",
-                                  transform: "translateY(-50%)",
-                                  background: "rgba(30, 41, 59, 0.9)",
-                                  border: "2px solid rgba(255, 255, 255, 0.1)",
-                                  borderRadius: "50%",
-                                  width: "50px",
-                                  height: "50px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                  fontSize: "24px",
-                                  color: "white",
-                                  transition: "all 0.2s",
-                                  zIndex: 10
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = "rgba(59, 130, 246, 0.9)";
-                                  e.currentTarget.style.transform = "translateY(-50%) scale(1.1)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "rgba(30, 41, 59, 0.9)";
-                                  e.currentTarget.style.transform = "translateY(-50%) scale(1)";
-                                }}
-                              >
-                                ›
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </>
-                    );
-                  }
-                  
-                  // Subsequent slides: Show 2 users per slide
-                  const participantsPerSlide = 2;
-                  const userSlideIndex = currentSlide - screenShareSlides; // Adjust for screen share slides
-                  const startIndex = userSlideIndex * participantsPerSlide;
-                  const currentParticipants = nonScreenParticipants.slice(startIndex, startIndex + participantsPerSlide);
-                  
-                  return (
-                    <>
-                      {/* User Grid */}
-                      <div style={{
-                        display: "grid",
-                        gridTemplateColumns: currentParticipants.length === 1 ? "1fr" : "repeat(2, 1fr)",
-                        gap: "20px",
-                        width: "100%",
-                        maxWidth: currentParticipants.length === 1 ? "600px" : "100%",
-                        margin: "0 auto",
-                        transition: "all 0.3s ease"
-                      }}>
-                        {currentParticipants.map((participant) => (
-                          <div key={`${participant.id}-${currentSlide}`} style={{ 
-                            position: "relative",
-                            borderRadius: "16px",
-                            overflow: "hidden",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-                            border: participant.isSelf 
-                              ? "2px solid rgba(59, 130, 246, 0.3)" 
-                              : "2px solid rgba(16, 185, 129, 0.3)",
-                            aspectRatio: "16/9",
-                            maxHeight: "400px"
-                          }}>
-                            <video
-                              ref={(el) => handleVideoRef(el, participant)}
-                              autoPlay
-                              muted={participant.isSelf}
-                              playsInline
-                              style={{ 
-                                width: "100%", 
-                                height: "100%",
-                                objectFit: "cover",
-                                background: "#1e293b",
-                                transform: (participant.isSelf && !participant.isScreenShare) ? "scaleX(-1)" : "none"
-                              }}
-                            />
                             <div style={{
                               position: "absolute",
                               bottom: "12px",
                               left: "12px",
-                              background: "rgba(0, 0, 0, 0.8)",
-                              backdropFilter: "blur(10px)",
                               padding: "6px 12px",
-                              borderRadius: "8px",
                               fontSize: "14px",
                               fontWeight: "500",
                               display: "flex",
                               alignItems: "center",
-                              gap: "6px"
+                              gap: "6px",
+                              color: "white",
+                              textShadow: "0 2px 8px rgba(0, 0, 0, 0.8)",
+                              pointerEvents: "none"
                             }}>
-                              <span>{participant.name}</span>
-                              {participant.isSelf && !isCameraOn && <VideoOff size={12} />}
-                              {participant.isSelf && !isMicOn && <MicOff size={12} />}
-                              {!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false && <VideoOff size={12} />}
-                              {!participant.isSelf && participantMediaStatus[participant.id]?.isMicOn === false && <MicOff size={12} />}
-                              {!participant.isSelf && participant.connectionStatus === "connected" && (
-                                <span style={{ color: "#10b981", fontSize: "10px" }}>●</span>
-                              )}
-                              {!participant.isSelf && participant.connectionStatus === "connecting" && (
-                                <span style={{ color: "#f59e0b", fontSize: "10px" }}>●</span>
-                              )}
-                              {!participant.isSelf && participant.connectionStatus === "failed" && (
-                                <span style={{ color: "#ef4444", fontSize: "10px" }}>●</span>
-                              )}
+                              <span>{participant.name}'s Screen</span>
+                              <Monitor size={12} color="#3b82f6" />
                             </div>
                           </div>
                         ))}
                       </div>
-
-                      {/* Navigation Arrows for User Slides */}
-                      {totalSlides > 1 && (
-                        <>
-                          {/* Left Arrow */}
-                          {currentSlide > 0 && (
-                            <button
-                              onClick={prevSlide}
-                              style={{
-                                position: "absolute",
-                                left: "20px",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                background: "rgba(30, 41, 59, 0.9)",
-                                border: "2px solid rgba(255, 255, 255, 0.1)",
-                                borderRadius: "50%",
-                                width: "50px",
-                                height: "50px",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                                fontSize: "24px",
-                                color: "white",
-                                transition: "all 0.2s",
-                                zIndex: 10
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "rgba(59, 130, 246, 0.9)";
-                                e.currentTarget.style.transform = "translateY(-50%) scale(1.1)";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "rgba(30, 41, 59, 0.9)";
-                                e.currentTarget.style.transform = "translateY(-50%) scale(1)";
-                              }}
-                            >
-                              ‹
-                            </button>
-                          )}
-
-                          {/* Right Arrow */}
-                          {currentSlide < totalSlides - 1 && (
-                            <button
-                              onClick={nextSlide}
-                              style={{
-                                position: "absolute",
-                                right: "20px",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                background: "rgba(30, 41, 59, 0.9)",
-                                border: "2px solid rgba(255, 255, 255, 0.1)",
-                                borderRadius: "50%",
-                                width: "50px",
-                                height: "50px",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                cursor: "pointer",
-                                fontSize: "24px",
-                                color: "white",
-                                transition: "all 0.2s",
-                                zIndex: 10
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "rgba(59, 130, 246, 0.9)";
-                                e.currentTarget.style.transform = "translateY(-50%) scale(1.1)";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "rgba(30, 41, 59, 0.9)";
-                                e.currentTarget.style.transform = "translateY(-50%) scale(1)";
-                              }}
-                            >
-                              ›
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </>
-                  );
-                }
-
-                // Desktop: Carousel with 2 people per slide (no screen sharing)
-                const totalSlides = calculateTotalSlides();
-                const participantsPerSlide = 2;
-                const startIndex = currentSlide * participantsPerSlide;
-                const currentParticipants = allParticipants.slice(startIndex, startIndex + participantsPerSlide);
-
-                return (
-                  <>
+                    )}
+                    
                     {/* Video Grid for Current Slide */}
                     <div style={{
                       display: "grid",
@@ -3635,17 +4564,25 @@ export default function Meeting() {
                       margin: "0 auto",
                       transition: "all 0.3s ease"
                     }}>
-                      {currentParticipants.map((participant) => (
+                      {currentParticipants.map((participant) => {
+                        const isSpeaking = speakingUsers[participant.id];
+                        
+                        return (
                         <div key={`${participant.id}-${currentSlide}`} style={{ 
                           position: "relative",
                           borderRadius: "16px",
                           overflow: "hidden",
-                          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-                          border: participant.isSelf 
-                            ? "2px solid rgba(59, 130, 246, 0.3)" 
-                            : "2px solid rgba(16, 185, 129, 0.3)",
+                          boxShadow: isSpeaking 
+                            ? "0 0 0 3px #10b981, 0 4px 20px rgba(0, 0, 0, 0.3)"
+                            : "0 4px 20px rgba(0, 0, 0, 0.3)",
+                          border: isSpeaking
+                            ? "2px solid #10b981"
+                            : participant.isSelf 
+                              ? "2px solid rgba(59, 130, 246, 0.3)" 
+                              : "2px solid rgba(16, 185, 129, 0.3)",
                           aspectRatio: "16/9",
-                          maxHeight: "400px"
+                          maxHeight: "400px",
+                          transition: "all 0.3s ease"
                         }}>
                           <video
                             ref={(el) => handleVideoRef(el, participant)}
@@ -3657,9 +4594,71 @@ export default function Meeting() {
                               height: "100%",
                               objectFit: "cover",
                               background: "#1e293b",
-                              transform: (participant.isSelf && !participant.isScreenShare) ? "scaleX(-1)" : "none"
+                              transform: participant.isSelf ? "scaleX(-1)" : "none"
                             }}
                           />
+                          
+                          {/* Profile Picture Overlay - Show when camera is off */}
+                          {((participant.isSelf && !isCameraOn) || 
+                           (!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false))
+                           && (
+                            <>
+                              {/* Sound wave rings when speaking */}
+                              {isSpeaking && (
+                                <>
+                                  <div className="sound-wave" style={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    width: "140px",
+                                    height: "140px",
+                                    borderRadius: "16px",
+                                    border: "3px solid #10b981",
+                                    pointerEvents: "none"
+                                  }} />
+                                  <div className="sound-wave" style={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    width: "140px",
+                                    height: "140px",
+                                    borderRadius: "16px",
+                                    border: "3px solid #10b981",
+                                    pointerEvents: "none",
+                                    animationDelay: "0.5s"
+                                  }} />
+                                </>
+                              )}
+                              
+                              <div style={{
+                              position: "absolute",
+                              top: "50%",
+                              left: "50%",
+                              transform: "translate(-50%, -50%)",
+                              width: "120px",
+                              height: "120px",
+                              borderRadius: "16px",
+                              background: participant.profilePic 
+                                ? `url(${participant.profilePic}) center/cover` 
+                                : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "48px",
+                              fontWeight: "bold",
+                              color: "white",
+                              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+                              border: "3px solid rgba(255, 255, 255, 0.2)"
+                            }}>
+                              {!participant.profilePic && 
+                                participant.name?.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2)
+                              }
+                            </div>
+                            </>
+                          )}
+                          
                           <div style={{
                             position: "absolute",
                             bottom: "12px",
@@ -3675,23 +4674,23 @@ export default function Meeting() {
                             gap: "6px"
                           }}>
                             <span>{participant.name}</span>
-                            {participant.isScreenShare && <Monitor size={12} color="#3b82f6" />}
-                            {participant.isSelf && !participant.isScreenShare && !isCameraOn && <VideoOff size={12} />}
-                            {participant.isSelf && !participant.isScreenShare && !isMicOn && <MicOff size={12} />}
-                            {!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false && !participantMediaStatus[participant.id]?.isScreenSharing && <VideoOff size={12} />}
+                            {participant.isSelf && !isCameraOn && <VideoOff size={12} />}
+                            {participant.isSelf && !isMicOn && <MicOff size={12} />}
+                            {!participant.isSelf && participantMediaStatus[participant.id]?.isCameraOn === false && <VideoOff size={12} />}
                             {!participant.isSelf && participantMediaStatus[participant.id]?.isMicOn === false && <MicOff size={12} />}
                             {!participant.isSelf && participant.connectionStatus === "connected" && (
-                              <span style={{ color: "#10b981", fontSize: "10px" }}>●</span>
+                              <Circle size={8} fill="#10b981" color="#10b981" />
                             )}
                             {!participant.isSelf && participant.connectionStatus === "connecting" && (
-                              <span style={{ color: "#f59e0b", fontSize: "10px" }}>●</span>
+                              <Circle size={8} fill="#f59e0b" color="#f59e0b" />
                             )}
                             {!participant.isSelf && participant.connectionStatus === "failed" && (
-                              <span style={{ color: "#ef4444", fontSize: "10px" }}>●</span>
+                              <Circle size={8} fill="#ef4444" color="#ef4444" />
                             )}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Navigation Arrows - Desktop only */}
@@ -3703,7 +4702,7 @@ export default function Meeting() {
                             onClick={prevSlide}
                             style={{
                               position: "absolute",
-                              left: "20px",
+                              left: "-70px",
                               top: "50%",
                               transform: "translateY(-50%)",
                               background: "rgba(30, 41, 59, 0.9)",
@@ -3739,7 +4738,7 @@ export default function Meeting() {
                             onClick={nextSlide}
                             style={{
                               position: "absolute",
-                              right: "20px",
+                              right: "-70px",
                               top: "50%",
                               transform: "translateY(-50%)",
                               background: "rgba(30, 41, 59, 0.9)",
@@ -3777,7 +4776,7 @@ export default function Meeting() {
 
             {/* Slide Indicators (Dots) - Desktop only */}
             {(() => {
-              const isMobile = window.innerWidth < 768;
+              const isMobile = isMobileState;
               
               // No pagination on mobile, so no dots needed
               if (isMobile) return null;
@@ -3822,6 +4821,38 @@ export default function Meeting() {
                 </div>
               );
             })()}
+
+          {/* Hidden Audio Elements for "Hear All" Feature */}
+          {hearAll && (() => {
+            // Get all remote participants (not self, not screen shares)
+            const allRemoteParticipants = Object.entries(remoteStreams)
+              .filter(([id]) => !id.endsWith('-screen'))
+              .map(([id, stream]) => ({
+                id,
+                stream,
+                name: participants[id]?.name || `User ${id.substring(0, 6)}`
+              }));
+
+            return (
+              <div style={{ display: 'none' }}>
+                {allRemoteParticipants.map(({ id, stream }) => (
+                  <audio
+                    key={`hear-all-${id}`}
+                    ref={(el) => {
+                      remoteAudioRefs.current[id] = el;
+                      if (el && stream) {
+                        el.srcObject = stream;
+                        el.muted = isScreenSharing; // mute if screen sharing to prevent echo
+                        el.play().catch(err => console.log('Audio play failed:', err));
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                  />
+                ))}
+              </div>
+            );
+          })()}
           </div>
 
           {/* Control Buttons - Fixed at bottom */}
@@ -3830,19 +4861,71 @@ export default function Meeting() {
             bottom: 0,
             left: 0,
             right: 0,
-            display: "flex", 
-            gap: window.innerWidth < 768 ? "8px" : "12px", 
-            flexWrap: "wrap", 
-            justifyContent: "center",
-            alignItems: "center",
-            padding: window.innerWidth < 768 ? "12px" : "20px",
-            background: "rgba(15, 23, 42, 0.95)",
-            backdropFilter: "blur(10px)",
-            borderTop: "1px solid rgba(255, 255, 255, 0.1)",
-            zIndex: 100
+            zIndex: 100,
+            pointerEvents: "none"
           }}>
+            {/* Peek handle — fixed at very bottom, shown when footer is hidden */}
+            <div
+              onClick={() => {
+                setFooterVisible(true);
+                clearTimeout(footerTimerRef.current);
+                footerTimerRef.current = setTimeout(() => setFooterVisible(false), 4000);
+              }}
+              style={{
+                pointerEvents: "auto",
+                position: "absolute",
+                bottom: footerVisible ? "-48px" : "10px",
+                left: "50%",
+                transform: footerVisible ? "translateX(-50%) scale(0.85)" : "translateX(-50%) scale(1)",
+                opacity: footerVisible ? 0 : 1,
+                transition: "bottom 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "80px",
+                height: "28px",
+                background: "rgba(30, 41, 59, 0.85)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: "12px",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.4)"
+              }}
+              title="Show controls"
+            >
+              <svg width="28" height="10" viewBox="0 0 28 10" fill="none">
+                <path
+                  d="M4 8 Q14 2 24 8"
+                  stroke="rgba(255,255,255,0.6)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+            </div>
+
+            {/* The actual control bar */}
+            <div
+              style={{
+                pointerEvents: footerVisible ? "auto" : "none",
+                width: "100%",
+                display: "flex",
+                gap: isMobileState ? "8px" : "12px",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                alignItems: "center",
+                padding: isMobileState ? "12px" : "20px",
+                background: "rgba(15, 23, 42, 0.95)",
+                backdropFilter: "blur(10px)",
+                borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+                transform: footerVisible ? "translateY(0)" : "translateY(110%)",
+                opacity: footerVisible ? 1 : 0,
+                transition: "transform 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease",
+                willChange: "transform"
+              }}
+            >
             {(() => {
-              const isMobile = window.innerWidth < 768;
+              const isMobile = isMobileState;
               const buttonSize = isMobile ? "48px" : "56px";
               const iconSize = isMobile ? 20 : 24;
               const buttonStyle = {
@@ -3889,19 +4972,22 @@ export default function Meeting() {
                     {isMicOn ? <Mic size={iconSize} /> : <MicOff size={iconSize} />}
                   </button>
 
-                  <button 
-                    onClick={toggleScreenShare}
-                    title="Share Screen (Alt+S)"
-                    style={{
-                      ...buttonStyle,
-                      background: isScreenSharing ? "#3b82f6" : "#475569",
-                      color: "white"
-                    }}
-                    onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = "translateY(-2px)")}
-                    onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = "translateY(0)")}
-                  >
-                    {isScreenSharing ? <MonitorOff size={iconSize} /> : <Monitor size={iconSize} />}
-                  </button>
+                  {/* Hide screen share button on mobile */}
+                  {!isMobile && (
+                    <button 
+                      onClick={toggleScreenShare}
+                      title="Share Screen (Alt+S)"
+                      style={{
+                        ...buttonStyle,
+                        background: isScreenSharing ? "#3b82f6" : "#475569",
+                        color: "white"
+                      }}
+                      onMouseEnter={(e) => !isMobile && (e.currentTarget.style.transform = "translateY(-2px)")}
+                      onMouseLeave={(e) => !isMobile && (e.currentTarget.style.transform = "translateY(0)")}
+                    >
+                      {isScreenSharing ? <MonitorOff size={iconSize} /> : <Monitor size={iconSize} />}
+                    </button>
+                  )}
 
                   <button 
                     onClick={() => setShowParticipants(!showParticipants)}
@@ -3953,7 +5039,7 @@ export default function Meeting() {
 
                   <button 
                     onClick={leaveMeeting}
-                    title="Leave Meeting (Alt+L)"
+                    title="Leave Assembly (Alt+L)"
                     style={{
                       ...buttonStyle,
                       background: "#dc2626",
@@ -3991,7 +5077,10 @@ export default function Meeting() {
                 </>
               );
             })()}
+            </div>
+            {/* End control bar inner */}
           </div>
+          {/* End control bar outer wrapper */}
 
           {/* Settings Panel */}
           {showSettings && (
@@ -4079,14 +5168,7 @@ export default function Meeting() {
                   fontSize: "13px",
                   lineHeight: "1.8"
                 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ color: "#94a3b8" }}>Peers:</span>
-                    <span style={{ fontWeight: "600" }}>{debugInfo.peersCount}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ color: "#94a3b8" }}>Remote Streams:</span>
-                    <span style={{ fontWeight: "600" }}>{debugInfo.remoteStreamsCount}</span>
-                  </div>
+
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                     <span style={{ color: "#94a3b8" }}>Socket:</span>
                     <span style={{ 
@@ -4178,14 +5260,436 @@ export default function Meeting() {
                       color: "#10b981",
                       fontWeight: "600"
                     }}>
-                      ✓ Chat is in its default position
+                      <Check size={16} /> Chat is in its default position
                     </div>
                   </div>
                 </button>
               </div>
 
-              {/* Network Settings Section */}
+              {/* Audio Settings Section */}
               <div style={{ marginBottom: "20px" }}>
+                <h4 style={{ 
+                  margin: "0 0 12px 0", 
+                  fontSize: "14px", 
+                  color: "#94a3b8",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px"
+                }}>
+                  Audio Settings
+                </h4>
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  padding: "12px",
+                  borderRadius: "8px"
+                }}>
+                  <div style={{ 
+                    display: "flex", 
+                    justifyContent: "space-between", 
+                    alignItems: "center",
+                    gap: "12px"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                      {hearAll ? <Volume2 size={18} color="#10b981" style={{ flexShrink: 0 }} /> : <VolumeX size={18} color="#94a3b8" style={{ flexShrink: 0 }} />}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: "600", marginBottom: "4px" }}>
+                          Hear All Participants
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                          {hearAll ? "Hearing audio from all slides" : "Only hearing current slide"}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setHearAll(!hearAll)}
+                      style={{
+                        width: "64px",
+                        flexShrink: 0,
+                        padding: "8px 0",
+                        background: hearAll ? "#10b981" : "#475569",
+                        border: "none",
+                        borderRadius: "6px",
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        textAlign: "center",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.2s"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = "0.8"}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+                    >
+                      {hearAll ? "ON" : "OFF"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Password Management Section (Host Only) */}
+              {isHost && (
+                <div style={{ marginBottom: "20px" }}>
+                  <h4 style={{ 
+                    margin: "0 0 12px 0", 
+                    fontSize: "14px", 
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}>
+                    Assembly Security (Host Only)
+                  </h4>
+                  <div style={{
+                    background: "rgba(255, 255, 255, 0.05)",
+                    padding: "12px",
+                    borderRadius: "8px"
+                  }}>
+                    <div style={{ 
+                      display: "flex", 
+                      justifyContent: "space-between", 
+                      alignItems: "center",
+                      marginBottom: isLocked || showPasswordInput ? "12px" : "0"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        {isLocked ? <Lock size={18} color="#ef4444" /> : <LockOpen size={18} color="#10b981" />}
+                        <div>
+                          <div style={{ fontWeight: "600", marginBottom: "4px" }}>
+                            {isLocked ? "Assembly Locked" : "Assembly Unlocked"}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                            {isLocked ? "Password required to join" : "Anyone with code can join"}
+                          </div>
+                        </div>
+                      </div>
+                      {!showPasswordInput && (
+                        <button
+                          onClick={() => {
+                            if (isLocked) {
+                              handleRemovePassword();
+                            } else {
+                              setShowPasswordInput(true);
+                            }
+                          }}
+                          style={{
+                            padding: "8px 16px",
+                            background: isLocked ? "#ef4444" : "#10b981",
+                            border: "none",
+                            borderRadius: "6px",
+                            color: "white",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            transition: "all 0.2s"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = "0.8"}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+                        >
+                          {isLocked ? "Unlock" : "Lock"}
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Show password reveal when locked */}
+                    {isLocked && revealedPassword && !showPasswordInput && (
+                      <div style={{
+                        background: "rgba(59, 130, 246, 0.1)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        borderRadius: "6px",
+                        padding: "10px",
+                        marginBottom: "12px"
+                      }}>
+                        <div style={{ 
+                          fontSize: "11px", 
+                          color: "#94a3b8", 
+                          marginBottom: "6px",
+                          fontWeight: "500"
+                        }}>
+                          Current Password:
+                        </div>
+                        <div style={{ 
+                          display: "flex", 
+                          alignItems: "center", 
+                          gap: "8px",
+                          justifyContent: "space-between"
+                        }}>
+                          <div style={{
+                            fontFamily: "monospace",
+                            fontSize: "16px",
+                            color: "white",
+                            fontWeight: "600",
+                            letterSpacing: showRevealedPassword ? "0.5px" : "3px",
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap"
+                          }}>
+                            {showRevealedPassword ? revealedPassword : "•••••••"}
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                            <button
+                              onClick={() => setShowRevealedPassword(!showRevealedPassword)}
+                              style={{
+                                background: "rgba(255, 255, 255, 0.1)",
+                                border: "none",
+                                borderRadius: "4px",
+                                color: "#94a3b8",
+                                cursor: "pointer",
+                                padding: "0 10px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                transition: "all 0.2s",
+                                width: "64px",
+                                height: "30px",
+                                flexShrink: 0
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)"}
+                              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)"}
+                            >
+                              {showRevealedPassword ? <EyeOff size={13} /> : <Eye size={13} />}
+                              {showRevealedPassword ? "Hide" : "Show"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(revealedPassword);
+                                showNotification("Password copied to clipboard", "success");
+                              }}
+                              style={{
+                                background: "rgba(59, 130, 246, 0.2)",
+                                border: "none",
+                                borderRadius: "4px",
+                                color: "#3b82f6",
+                                cursor: "pointer",
+                                padding: "0 10px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "4px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                transition: "all 0.2s",
+                                width: "64px",
+                                height: "30px",
+                                flexShrink: 0
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(59, 130, 246, 0.3)"}
+                              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(59, 130, 246, 0.2)"}
+                            >
+                              <Copy size={13} />
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {showPasswordInput && (
+                      <div style={{ marginTop: "12px" }}>
+                        <div style={{ position: "relative" }}>
+                          <input
+                            type={showMeetingPassword ? "text" : "password"}
+                            placeholder="Enter password"
+                            value={meetingPassword}
+                            maxLength={9}
+                            onChange={(e) => {
+                              setMeetingPassword(e.target.value.slice(0, 9));
+                              setPasswordError("");
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSetPassword();
+                              }
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              paddingRight: "40px",
+                              background: "rgba(255, 255, 255, 0.1)",
+                              border: passwordError ? "1px solid #ef4444" : "1px solid rgba(255, 255, 255, 0.2)",
+                              borderRadius: "6px",
+                              color: "white",
+                              fontSize: "14px",
+                              marginBottom: "4px"
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowMeetingPassword(!showMeetingPassword)}
+                            style={{
+                              position: "absolute",
+                              right: "10px",
+                              top: "10px",
+                              background: "transparent",
+                              border: "none",
+                              color: "#94a3b8",
+                              cursor: "pointer",
+                              padding: "0",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center"
+                            }}
+                          >
+                            {showMeetingPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                        {passwordError && (
+                          <div style={{ color: "#ef4444", fontSize: "12px", marginBottom: "8px" }}>
+                            {passwordError}
+                          </div>
+                        )}
+                        <div style={{
+                          textAlign: "right",
+                          fontSize: "11px",
+                          color: meetingPassword.length === 9 ? "#ef4444" : "#64748b",
+                          marginBottom: "8px"
+                        }}>
+                          {meetingPassword.length}/9
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            onClick={handleSetPassword}
+                            style={{
+                              flex: 1,
+                              padding: "8px",
+                              background: "#10b981",
+                              border: "none",
+                              borderRadius: "6px",
+                              color: "white",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Set Password
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowPasswordInput(false);
+                              setMeetingPassword("");
+                              setPasswordError("");
+                              setShowMeetingPassword(false);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "8px",
+                              background: "rgba(255, 255, 255, 0.1)",
+                              border: "none",
+                              borderRadius: "6px",
+                              color: "white",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Host Controls Section (Host Only) */}
+              {isHost && Object.keys(remoteStreams).filter(id => !id.endsWith('-screen')).length > 0 && (
+                <div style={{ marginBottom: "20px" }}>
+                  <h4 style={{ 
+                    margin: "0 0 12px 0", 
+                    fontSize: "14px", 
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}>
+                    Host Controls
+                  </h4>
+                  <div style={{
+                    background: "rgba(255, 255, 255, 0.05)",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    maxHeight: "300px",
+                    overflowY: "auto"
+                  }}>
+                    {Object.entries(remoteStreams)
+                      .filter(([userId]) => !userId.endsWith('-screen'))
+                      .map(([userId]) => {
+                        const participant = participants[userId];
+                        const displayName = participant?.name || `User ${userId.substring(0, 6)}`;
+                        
+                        return (
+                          <div key={userId} style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "8px",
+                            marginBottom: "8px",
+                            background: "rgba(255, 255, 255, 0.05)",
+                            borderRadius: "6px"
+                          }}>
+                            <span style={{ fontSize: "14px" }}>{displayName}</span>
+                            {showRemoveConfirm === userId ? (
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button
+                                  onClick={() => handleRemoveParticipant(userId)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#ef4444",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    color: "white",
+                                    cursor: "pointer",
+                                    fontSize: "11px",
+                                    fontWeight: "600"
+                                  }}
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setShowRemoveConfirm(null)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "rgba(255, 255, 255, 0.1)",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    color: "white",
+                                    cursor: "pointer",
+                                    fontSize: "11px",
+                                    fontWeight: "600"
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setShowRemoveConfirm(userId)}
+                                style={{
+                                  padding: "6px 12px",
+                                  background: "#ef4444",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  color: "white",
+                                  cursor: "pointer",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  transition: "all 0.2s"
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.opacity = "0.8"}
+                                onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Network Settings Section - hidden, uncomment {false && to restore */}
+              {false && <div style={{ marginBottom: "20px" }}>
                 <h4 style={{ 
                   margin: "0 0 12px 0", 
                   fontSize: "14px", 
@@ -4228,8 +5732,8 @@ export default function Meeting() {
                           localStorage.setItem('forceRelay', e.target.checked.toString());
                           showNotification(
                             e.target.checked 
-                              ? "Force relay enabled - Rejoin meeting to apply" 
-                              : "Force relay disabled - Rejoin meeting to apply",
+                              ? "Force relay enabled - Rejoin assembly to apply" 
+                              : "Force relay disabled - Rejoin assembly to apply",
                             "info"
                           );
                         }}
@@ -4268,10 +5772,10 @@ export default function Meeting() {
                     borderRadius: "6px",
                     marginTop: "8px"
                   }}>
-                    ⚠️ Requires rejoining the meeting to take effect. Check console for ICE candidate types.
+                    ⚠️ Requires rejoining the assembly to take effect. Check console for ICE candidate types.
                   </div>
                 </div>
-              </div>
+              </div>}
 
               {/* Keyboard Shortcuts Section - Hidden on mobile/tablet */}
               {window.innerWidth > 768 && (
@@ -4388,7 +5892,7 @@ export default function Meeting() {
                     paddingBottom: "10px",
                     borderBottom: "1px solid rgba(255, 255, 255, 0.05)"
                   }}>
-                    <span style={{ color: "#94a3b8" }}>Leave Meeting</span>
+                    <span style={{ color: "#94a3b8" }}>Leave Assembly</span>
                     <kbd style={{
                       background: "rgba(255, 255, 255, 0.1)",
                       padding: "4px 8px",
@@ -4431,13 +5935,338 @@ export default function Meeting() {
                 </div>
               </div>
               )}
+
+              {/* Troubleshooting Section */}
+              {(() => {
+                const issues = [
+                  {
+                    Icon: VolumeX,
+                    color: "#ef4444",
+                    title: "Can't hear audio from screen share",
+                    fixes: [
+                      "Make sure the presenter enabled 'Share audio' when starting screen share",
+                      "Enable 'Hear All Participants' in Audio Settings above",
+                      "Check your device volume and make sure it is not muted",
+                      "Right-click the browser tab and check it is not muted",
+                      "Make sure you are on the same slide as the screen share",
+                      "Try rejoining the assembly",
+                    ]
+                  },
+                  {
+                    Icon: Volume2,
+                    color: "#f59e0b",
+                    title: "Can't hear everyone in the call",
+                    fixes: [
+                      "Enable 'Hear All Participants' toggle in Audio Settings above — you may only be hearing the current slide",
+                      "Check your device volume is turned up",
+                      "Ask participants to unmute themselves",
+                      "Check if your browser tab is muted (right-click tab → Unmute)",
+                      "Rejoin the assembly to reset audio connections",
+                    ]
+                  },
+                  {
+                    Icon: MessageCircleOff,
+                    color: "#8b5cf6",
+                    title: "Chat window not visible after opening",
+                    fixes: [
+                      "Click 'Reset Chat Position' in Chat Settings above — the chat may have moved off-screen",
+                      "The chat window may be hidden behind other elements — try resetting its position",
+                      "On mobile, the chat opens as a full panel — tap the chat icon again",
+                    ]
+                  },
+                  {
+                    Icon: MessageSquare,
+                    color: "#6366f1",
+                    title: "Chat is half cut off or out of bounds",
+                    fixes: [
+                      "Drag the chat window from the top bar to reposition it on screen",
+                      "Drag from the bottom-right corner to resize the chat window",
+                      "Click 'Reset Chat Position' in Chat Settings above to snap it back to default",
+                    ]
+                  },
+                  {
+                    Icon: Users,
+                    color: "#10b981",
+                    title: "Can't see anyone in the conference",
+                    fixes: [
+                      "Double-check the assembly code is correct — ask the host to resend it",
+                      "Refresh the page and rejoin with the same code",
+                      "Wait a few seconds — peer connections can take time to establish",
+                      "Ask other participants if they can see each other (may be a host issue)",
+                      "Try creating a new assembly and sharing the new code",
+                      "Check your internet connection is stable",
+                    ]
+                  },
+                  {
+                    Icon: VideoOff,
+                    color: "#ef4444",
+                    title: "Camera not working or showing black screen",
+                    fixes: [
+                      "Check if another app (Zoom, Teams) is already using your camera — close it",
+                      "Click the lock icon in the browser address bar and allow camera access",
+                      "Refresh the page and grant camera permission again when prompted",
+                      "Make sure your camera is not disabled in your OS device settings",
+                      "Try a different browser — Chrome has the best WebRTC support",
+                      "Restart your browser completely and rejoin",
+                    ]
+                  },
+                  {
+                    Icon: MicOff,
+                    color: "#f97316",
+                    title: "Microphone not working / others can't hear you",
+                    fixes: [
+                      "Click the lock icon in the browser address bar and allow microphone access",
+                      "Check the mic button in the bottom control bar — make sure it is unmuted",
+                      "Go to your OS sound settings and confirm the correct mic is set as default",
+                      "Check for a physical mute button on your headset or microphone",
+                      "Close other apps that may be capturing the microphone",
+                      "Watch for the speaking indicator — if it lights up, your mic is working",
+                      "Rejoin the assembly to reinitialize the audio stream",
+                    ]
+                  },
+                  {
+                    Icon: Headphones,
+                    color: "#f59e0b",
+                    title: "Echo or audio feedback",
+                    fixes: [
+                      "Use headphones — speakers cause audio to loop back into your mic",
+                      "Lower your speaker volume",
+                      "Mute yourself when you are not speaking",
+                      "Check if you have multiple tabs of the same meeting open and close duplicates",
+                      "Ask other participants to mute when not speaking",
+                    ]
+                  },
+                  {
+                    Icon: Wifi,
+                    color: "#3b82f6",
+                    title: "Video is choppy, freezing, or low quality",
+                    fixes: [
+                      "Check your internet connection — run a speed test",
+                      "Move closer to your Wi-Fi router or switch to a wired connection",
+                      "Close other bandwidth-heavy apps and browser tabs",
+                      "Ask participants to turn off cameras to reduce bandwidth usage",
+                      "Avoid screen sharing simultaneously with video on slow connections",
+                      "Rejoin — WebRTC will renegotiate a better quality connection",
+                    ]
+                  },
+                  {
+                    Icon: MonitorX,
+                    color: "#64748b",
+                    title: "Screen share not starting or showing blank",
+                    fixes: [
+                      "Allow screen sharing permission when the browser prompts you",
+                      "On macOS: System Preferences → Security & Privacy → Screen Recording → allow your browser",
+                      "Select the correct window, tab, or screen when the picker appears",
+                      "Try sharing a specific browser tab instead of the entire screen",
+                      "Refresh the page and try again",
+                      "Safari has limited screen share support — use Chrome or Firefox instead",
+                    ]
+                  },
+                  {
+                    Icon: UserX,
+                    color: "#94a3b8",
+                    title: "Disconnected or removed from the meeting",
+                    fixes: [
+                      "Check your internet connection",
+                      "You may have been removed by the host",
+                      "The session may have ended because the host left",
+                      "Your session token may have expired — log out and log back in",
+                      "Rejoin using the same meeting code",
+                    ]
+                  },
+                  {
+                    Icon: Lock,
+                    color: "#ef4444",
+                    title: "Can't join — assembly is locked or wrong password",
+                    fixes: [
+                      "Ask the host for the correct password",
+                      "Passwords are case-sensitive — type it exactly as given",
+                      "Ask the host to temporarily unlock the assembly",
+                      "Confirm you have the correct meeting code",
+                    ]
+                  },
+                  {
+                    Icon: Smartphone,
+                    color: "#06b6d4",
+                    title: "Issues on mobile device",
+                    fixes: [
+                      "Use Chrome on Android or Safari on iOS for best compatibility",
+                      "Allow camera and microphone in your mobile browser settings",
+                      "Screen sharing is not supported on iOS browsers — use a desktop",
+                      "If audio cuts out, lock and unlock your screen to restore it",
+                      "Avoid switching apps mid-call — it pauses your media streams",
+                      "Keep your screen on to prevent the browser from suspending",
+                    ]
+                  },
+                  {
+                    Icon: Zap,
+                    color: "#f59e0b",
+                    title: "High latency or delay in audio / video",
+                    fixes: [
+                      "Switch to 5GHz Wi-Fi or a wired ethernet connection",
+                      "Close background apps consuming CPU or bandwidth",
+                      "Reduce active video streams — ask some participants to turn off cameras",
+                      "Disable your VPN if you are using one — it adds significant latency",
+                      "Rejoin — the server will attempt to find a better routing path",
+                    ]
+                  },
+                  {
+                    Icon: RefreshCw,
+                    color: "#10b981",
+                    title: "Page is unresponsive or UI is frozen",
+                    fixes: [
+                      "Hard refresh: Ctrl+Shift+R on Windows / Cmd+Shift+R on Mac",
+                      "Check if your CPU is maxed out — close other heavy tabs",
+                      "Clear browser cache and cookies, then rejoin",
+                      "Try a different browser",
+                      "Disable browser extensions such as ad blockers or privacy tools that may interfere",
+                    ]
+                  },
+                ];
+
+                return (
+                  <div style={{ marginTop: "8px" }}>
+                    <h4 style={{
+                      margin: "0 0 12px 0",
+                      fontSize: "14px",
+                      color: "#94a3b8",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}>
+                      <AlertTriangle size={14} color="#f59e0b" />
+                      Troubleshooting
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                      {issues.map((issue, i) => {
+                        const isOpen = openTroubleshootIndex === i;
+                        return (
+                          <div key={i} style={{
+                            background: isOpen ? "rgba(59,130,246,0.06)" : "rgba(255,255,255,0.03)",
+                            border: `1px solid ${isOpen ? "rgba(59,130,246,0.35)" : "rgba(255,255,255,0.07)"}`,
+                            borderRadius: "10px",
+                            overflow: "hidden",
+                            transition: "all 0.2s"
+                          }}>
+                            <button
+                              onClick={() => setOpenTroubleshootIndex(isOpen ? null : i)}
+                              style={{
+                                width: "100%",
+                                padding: "12px 14px",
+                                background: "transparent",
+                                border: "none",
+                                color: "white",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "12px",
+                                textAlign: "left"
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  width: "32px",
+                                  height: "32px",
+                                  borderRadius: "8px",
+                                  background: `${issue.color}18`,
+                                  border: `1px solid ${issue.color}30`,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0
+                                }}>
+                                  <issue.Icon size={15} color={issue.color} />
+                                </div>
+                                <span style={{ fontSize: "13px", fontWeight: "600", lineHeight: "1.4", color: isOpen ? "#e2e8f0" : "#cbd5e1" }}>
+                                  {issue.title}
+                                </span>
+                              </div>
+                              <ChevronDown
+                                size={15}
+                                color="#475569"
+                                style={{
+                                  flexShrink: 0,
+                                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                                  transition: "transform 0.2s"
+                                }}
+                              />
+                            </button>
+                            {isOpen && (
+                              <div style={{
+                                padding: "0 14px 14px 14px",
+                                borderTop: "1px solid rgba(255,255,255,0.06)"
+                              }}>
+                                <p style={{
+                                  margin: "12px 0 10px 0",
+                                  fontSize: "11px",
+                                  color: "#475569",
+                                  fontWeight: "700",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.6px"
+                                }}>
+                                  Possible fixes
+                                </p>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                  {issue.fixes.map((fix, j) => (
+                                    <div key={j} style={{
+                                      display: "flex",
+                                      alignItems: "flex-start",
+                                      gap: "10px",
+                                      fontSize: "13px",
+                                      color: "#94a3b8",
+                                      lineHeight: "1.55"
+                                    }}>
+                                      <span style={{
+                                        width: "20px",
+                                        height: "20px",
+                                        borderRadius: "6px",
+                                        background: `${issue.color}18`,
+                                        border: `1px solid ${issue.color}25`,
+                                        color: issue.color,
+                                        fontSize: "11px",
+                                        fontWeight: "700",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        flexShrink: 0,
+                                        marginTop: "1px"
+                                      }}>{j + 1}</span>
+                                      <span>{fix}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               </div>
               {/* End Scrollable Content */}
             </div>
           )}
-        </div>
+          </div>
+          {/* End Main Content Wrapper */}
+        </>
       )}
     </div>
+
+    {/* Profile Settings Modal */}
+    <Settings
+      isOpen={showProfileSettings}
+      onClose={() => setShowProfileSettings(false)}
+      user={currentUser}
+      onUpdate={handleProfileUpdate}
+      title="Profile"
+      headerIcon="profile"
+    />
     </>
   );
 }

@@ -108,9 +108,20 @@ exports.getSession = async (req, res, next) => {
       );
     }
 
+    const sessionData = session.toObject();
+    
+    // Check if requester is the host
+    const isHost = session.hostId._id.toString() === req.user._id.toString() || 
+                   session.hostId.toString() === req.user._id.toString();
+    
+    // Only send password to host, hide from other participants
+    if (!isHost) {
+      delete sessionData.password;
+    }
+
     return successResponse(
       res,
-      session,
+      sessionData,
       'Session fetched successfully'
     );
   } catch (error) {
@@ -190,7 +201,7 @@ exports.getUserMeetings = async (req, res, next) => {
     })
     .sort({ updatedAt: -1 })
     .limit(20)
-    .select('meetingCode hostId hostName status participants joinedUsers createdAt updatedAt')
+    .select('meetingCode hostId hostName status participants joinedUsers createdAt updatedAt password isLocked')
     .populate('hostId', 'name username profilePic');
 
     // Format the response
@@ -211,16 +222,20 @@ exports.getUserMeetings = async (req, res, next) => {
       // Get duration for current user
       const userJoinData = session.joinedUsers.find(u => u.userId.toString() === userId.toString());
       const duration = userJoinData?.duration || 0;
+      
+      const isHost = session.hostId._id.toString() === userId.toString();
 
       return {
         code: session.meetingCode,
         status: session.status,
         hostName: session.hostName,
-        isHost: session.hostId._id.toString() === userId.toString(),
+        isHost: isHost,
         participantCount: totalParticipants,
         lastJoined: session.joinedUsers.find(u => u.userId.toString() === userId.toString())?.joinedAt || session.createdAt,
         createdAt: session.createdAt,
-        duration: duration
+        duration: duration,
+        // Only include password if user is the host
+        ...(isHost && session.isLocked && { password: session.password, isLocked: true })
       };
     });
 
@@ -270,6 +285,378 @@ exports.updateSessionDuration = async (req, res, next) => {
     );
   } catch (error) {
     logger.error('Update duration error:', error);
+    next(error);
+  }
+};
+
+// Set or update meeting password (host only)
+exports.setPassword = async (req, res, next) => {
+  try {
+    const { meetingCode } = req.params;
+    const { password } = req.body;
+    const userId = req.user._id;
+    
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase(),
+      hostId: userId
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found or you are not the host',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    await session.setPassword(password);
+
+    logger.info('Session password set', { 
+      sessionId: session._id, 
+      meetingCode,
+      isLocked: session.isLocked
+    });
+    
+    return successResponse(
+      res,
+      { isLocked: session.isLocked },
+      'Password set successfully'
+    );
+  } catch (error) {
+    logger.error('Set password error:', error);
+    next(error);
+  }
+};
+
+// Remove password from meeting (host only)
+exports.removePassword = async (req, res, next) => {
+  try {
+    const { meetingCode } = req.params;
+    const userId = req.user._id;
+    
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase(),
+      hostId: userId
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found or you are not the host',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    await session.removePassword();
+
+    logger.info('Session password removed', { 
+      sessionId: session._id, 
+      meetingCode
+    });
+    
+    return successResponse(
+      res,
+      { isLocked: false },
+      'Password removed successfully'
+    );
+  } catch (error) {
+    logger.error('Remove password error:', error);
+    next(error);
+  }
+};
+
+// Verify meeting password
+exports.verifyPassword = async (req, res, next) => {
+  try {
+    const { meetingCode } = req.params;
+    const { password } = req.body;
+    
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase()
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    const isValid = session.verifyPassword(password);
+
+    if (!isValid) {
+      return errorResponse(
+        res,
+        'Incorrect password',
+        'INVALID_PASSWORD',
+        401
+      );
+    }
+
+    return successResponse(
+      res,
+      { valid: true },
+      'Password verified successfully'
+    );
+  } catch (error) {
+    logger.error('Verify password error:', error);
+    next(error);
+  }
+};
+
+// Remove participant from meeting (host only)
+exports.removeParticipant = async (req, res, next) => {
+  try {
+    const { meetingCode, socketId } = req.params;
+    const userId = req.user._id;
+    
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase(),
+      hostId: userId
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found or you are not the host',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    // Remove participant
+    await session.removeParticipant(socketId);
+
+    logger.info('Participant removed by host', { 
+      sessionId: session._id, 
+      meetingCode,
+      removedSocketId: socketId
+    });
+    
+    return successResponse(
+      res,
+      null,
+      'Participant removed successfully'
+    );
+  } catch (error) {
+    logger.error('Remove participant error:', error);
+    next(error);
+  }
+};
+
+// Slide Management Controllers
+
+// Create a new slide
+exports.createSlide = async (req, res, next) => {
+  try {
+    const { meetingCode } = req.params;
+    const { name } = req.body;
+    const userId = req.user._id;
+    
+    if (!name || !name.trim()) {
+      return errorResponse(
+        res,
+        'Slide name is required',
+        'VALIDATION_ERROR',
+        400
+      );
+    }
+
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase()
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    await session.createSlide(name.trim(), userId);
+
+    logger.info('Slide created', { 
+      sessionId: session._id, 
+      meetingCode,
+      slideName: name
+    });
+    
+    return successResponse(
+      res,
+      { slides: session.slides },
+      'Slide created successfully',
+      201
+    );
+  } catch (error) {
+    logger.error('Create slide error:', error);
+    next(error);
+  }
+};
+
+// Get all slides for a session
+exports.getSlides = async (req, res, next) => {
+  try {
+    const { meetingCode } = req.params;
+    
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase()
+    }).select('slides');
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    return successResponse(
+      res,
+      { slides: session.slides },
+      'Slides fetched successfully'
+    );
+  } catch (error) {
+    logger.error('Get slides error:', error);
+    next(error);
+  }
+};
+
+// Rename a slide
+exports.renameSlide = async (req, res, next) => {
+  try {
+    const { meetingCode, slideId } = req.params;
+    const { name } = req.body;
+    
+    if (!name || !name.trim()) {
+      return errorResponse(
+        res,
+        'Slide name is required',
+        'VALIDATION_ERROR',
+        400
+      );
+    }
+
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase()
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    await session.renameSlide(slideId, name.trim());
+
+    logger.info('Slide renamed', { 
+      sessionId: session._id, 
+      meetingCode,
+      slideId,
+      newName: name
+    });
+    
+    return successResponse(
+      res,
+      { slides: session.slides },
+      'Slide renamed successfully'
+    );
+  } catch (error) {
+    logger.error('Rename slide error:', error);
+    next(error);
+  }
+};
+
+// Delete a slide
+exports.deleteSlide = async (req, res, next) => {
+  try {
+    const { meetingCode, slideId } = req.params;
+    
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase()
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    await session.deleteSlide(slideId);
+
+    logger.info('Slide deleted', { 
+      sessionId: session._id, 
+      meetingCode,
+      slideId
+    });
+    
+    return successResponse(
+      res,
+      { slides: session.slides },
+      'Slide deleted successfully'
+    );
+  } catch (error) {
+    logger.error('Delete slide error:', error);
+    next(error);
+  }
+};
+
+// Move to a slide
+exports.moveToSlide = async (req, res, next) => {
+  try {
+    const { meetingCode, slideId } = req.params;
+    const { socketId } = req.body;
+    
+    if (!socketId) {
+      return errorResponse(
+        res,
+        'Socket ID is required',
+        'VALIDATION_ERROR',
+        400
+      );
+    }
+
+    const session = await Session.findOne({ 
+      meetingCode: meetingCode.toUpperCase()
+    });
+
+    if (!session) {
+      return errorResponse(
+        res,
+        'Session not found',
+        'SESSION_NOT_FOUND',
+        404
+      );
+    }
+
+    await session.moveToSlide(socketId, slideId);
+
+    logger.info('User moved to slide', { 
+      sessionId: session._id, 
+      meetingCode,
+      slideId,
+      socketId
+    });
+    
+    return successResponse(
+      res,
+      { slides: session.slides },
+      'Moved to slide successfully'
+    );
+  } catch (error) {
+    logger.error('Move to slide error:', error);
     next(error);
   }
 };

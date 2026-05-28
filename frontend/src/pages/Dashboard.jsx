@@ -5,7 +5,7 @@ import Settings from "../components/Settings";
 import TiltCard from "../components/TiltCard";
 import { useAuth } from "../contexts/AuthContext";
 import { sessionAPI } from "../api/session";
-import { Video, Plus, Clock, Users, Trash2, X, CheckCircle, Link2, Settings as SettingsIcon } from "lucide-react";
+import { Video, Plus, Clock, Users, Trash2, X, CheckCircle, Link2, Settings as SettingsIcon, AlertCircle, Eye, EyeOff, Lock, LockOpen } from "lucide-react";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -19,6 +19,13 @@ export default function Dashboard() {
   const [isMouseMoving, setIsMouseMoving] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const { user, isAuthenticated, loading, updateUser } = useAuth();
+  
+  // Password verification state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [pendingMeetingCode, setPendingMeetingCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   
   // Use refs for timeouts to prevent stale closures
   const mouseTimeoutRef = useRef(null);
@@ -142,8 +149,20 @@ export default function Dashboard() {
 
     try {
       const normalizedCode = meetingCode.toUpperCase();
-      await sessionAPI.getSession(normalizedCode);
-      // Meeting will be tracked automatically when user joins via socket
+      const response = await sessionAPI.getSession(normalizedCode);
+      const session = response.data;
+      
+      // Check if meeting is locked
+      if (session.isLocked) {
+        // Show password modal
+        setPendingMeetingCode(normalizedCode);
+        setShowPasswordModal(true);
+        setPasswordInput("");
+        setPasswordError("");
+        return;
+      }
+      
+      // Meeting is not locked, join directly
       navigate(`/conference/${normalizedCode}`);
     } catch (err) {
       console.error("Error joining session:", err);
@@ -156,6 +175,33 @@ export default function Dashboard() {
       } else {
         setJoinError(err.message || "Assembly session not found");
       }
+    }
+  };
+
+  const handlePasswordSubmit = async () => {
+    if (!passwordInput.trim()) {
+      setPasswordError("Password is required");
+      return;
+    }
+
+    try {
+      // Verify password with backend
+      await sessionAPI.verifyPassword(pendingMeetingCode, passwordInput);
+      
+      // Password correct, join meeting
+      setShowPasswordModal(false);
+      setPasswordInput("");
+      setPasswordError("");
+      navigate(`/conference/${pendingMeetingCode}`);
+    } catch (err) {
+      console.error("Password verification failed:", err);
+      setPasswordError("Incorrect password");
+    }
+  };
+
+  const handlePasswordKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handlePasswordSubmit();
     }
   };
 
@@ -393,6 +439,191 @@ export default function Dashboard() {
         onUpdate={handleUserUpdate}
       />
 
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.8)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 2000,
+          padding: "20px"
+        }}>
+          <div style={{
+            background: "#1e293b",
+            borderRadius: "16px",
+            padding: "30px",
+            maxWidth: "400px",
+            width: "100%",
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.5)"
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "20px"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <Lock size={28} color="#ef4444" />
+                <h2 style={{ margin: 0, fontSize: "24px", color: "white" }}>
+                  Assembly is Locked
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordInput("");
+                  setPasswordError("");
+                  setPendingMeetingCode("");
+                  setShowPassword(false);
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: "24px",
+                  padding: "0",
+                  width: "30px",
+                  height: "30px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <p style={{ color: "#94a3b8", marginBottom: "20px", fontSize: "14px" }}>
+              This assembly requires a password to join. Please enter the password provided by the host.
+            </p>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "8px", 
+                color: "#cbd5e1",
+                fontSize: "14px",
+                fontWeight: "500"
+              }}>
+                Enter Password
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setPasswordError("");
+                  }}
+                  onKeyDown={handlePasswordKeyDown}
+                  placeholder="Enter assembly password"
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    paddingRight: "45px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: passwordError ? "2px solid #ef4444" : "2px solid rgba(255, 255, 255, 0.2)",
+                    borderRadius: "8px",
+                    color: "white",
+                    fontSize: "16px",
+                    outline: "none",
+                    transition: "border-color 0.2s"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              {passwordError && (
+                <div style={{ 
+                  color: "#ef4444", 
+                  fontSize: "13px", 
+                  marginTop: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}>
+                  <AlertCircle size={14} />
+                  {passwordError}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                onClick={handlePasswordSubmit}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "#3b82f6",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "white",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#2563eb"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "#3b82f6"}
+              >
+                Join Assembly
+              </button>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordInput("");
+                  setPasswordError("");
+                  setPendingMeetingCode("");
+                  setShowPassword(false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "white",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)"}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div style={{
@@ -527,6 +758,22 @@ function MeetingCard({ meeting, onJoin, checkStatus }) {
         <div className="meeting-code">
           {meeting.code}
           {meeting.isHost && <span style={{ marginLeft: '8px', fontSize: '12px', color: '#3b82f6' }}>(Host)</span>}
+          {meeting.isHost && meeting.isLocked && meeting.password && (
+            <span style={{ 
+              marginLeft: '8px', 
+              fontSize: '11px', 
+              color: '#10b981',
+              background: 'rgba(16, 185, 129, 0.1)',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <Lock size={12} /> {meeting.password}
+            </span>
+          )}
         </div>
         <div className="meeting-meta">
           <span className="meeting-time">

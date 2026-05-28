@@ -9,7 +9,8 @@ import {
   EyeOff,
   AlertCircle,
   CheckCircle,
-  UserPlus
+  UserPlus,
+  Zap
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -32,9 +33,10 @@ export default function Signup() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(null);
   const navigate = useNavigate();
-  const { signup } = useAuth();
+  const { signup, guestLogin } = useAuth();
   const nameInputRef = useRef(null);
 
   // Auto-focus name input on mount
@@ -97,6 +99,20 @@ export default function Signup() {
 
   const handleBlur = (field) => {
     setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  const handleGuestLogin = async () => {
+    setIsGuestLoading(true);
+    setErrors({});
+    try {
+      await guestLogin();
+      sessionStorage.setItem("justLoggedIn", "true");
+      navigate("/home");
+    } catch (err) {
+      setErrors({ general: err.message || "Failed to create guest account. Please try again." });
+    } finally {
+      setIsGuestLoading(false);
+    }
   };
 
   const handleSignup = async (e) => {
@@ -360,7 +376,7 @@ export default function Signup() {
           <button
             type="submit"
             className="auth-button"
-            disabled={isLoading || !isFormValid}
+            disabled={isLoading || isGuestLoading || !isFormValid}
             aria-busy={isLoading}
           >
             {isLoading ? (
@@ -372,6 +388,32 @@ export default function Signup() {
               <>
                 <UserPlus />
                 <span>Create Account</span>
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="auth-divider">
+            <span>or</span>
+          </div>
+
+          {/* Guest Login Button */}
+          <button
+            type="button"
+            className="auth-button guest-button"
+            onClick={handleGuestLogin}
+            disabled={isLoading || isGuestLoading}
+            aria-busy={isGuestLoading}
+          >
+            {isGuestLoading ? (
+              <>
+                <div className="spinner" aria-hidden="true"></div>
+                <span>Setting up guest...</span>
+              </>
+            ) : (
+              <>
+                <Zap />
+                <span>Try as Guest</span>
               </>
             )}
           </button>

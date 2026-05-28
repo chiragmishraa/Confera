@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { authAPI } from "../api/auth";
-import { Settings as SettingsIcon, User, Lock, Info, Camera, Trash2, Save, LogOut, RotateCcw, Check, X as CloseIcon, Eye, EyeOff, Edit, Video, Monitor, MessageSquare, Shield } from "lucide-react";
+import { Settings as SettingsIcon, User, Lock, Info, Camera, Trash2, Save, LogOut, RotateCcw, Check, X as CloseIcon, Eye, EyeOff, Edit, Video, Monitor, MessageSquare, Shield, AlertTriangle } from "lucide-react";
 
-export default function Settings({ isOpen, onClose, user, onUpdate }) {
+export default function Settings({ isOpen, onClose, user, onUpdate, title = "Settings", headerIcon = "settings" }) {
   const [activeTab, setActiveTab] = useState("profile");
   const [formData, setFormData] = useState({
     name: user?.name || "",
@@ -35,6 +35,8 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
     confirm: ""
   });
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
 
@@ -360,6 +362,20 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
     window.location.href = "/";
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      await authAPI.deleteAccount();
+      localStorage.removeItem("token");
+      window.location.href = "/";
+    } catch (err) {
+      showMessage(err.message || "Failed to delete account. Please try again.", "error");
+      setShowDeleteConfirm(false);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const getInitials = (name) => {
@@ -386,6 +402,25 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
       zIndex: 1000,
       padding: "20px"
     }}>
+      <style>{`
+        .settings-modal-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        .settings-modal-scroll::-webkit-scrollbar-track {
+          background: #0f172a;
+          border-radius: 4px;
+        }
+        .settings-modal-scroll::-webkit-scrollbar-thumb {
+          background: #334155;
+          border-radius: 4px;
+        }
+        .settings-modal-scroll::-webkit-scrollbar-thumb:hover {
+          background: #475569;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <div style={{
         background: "#1e293b",
         borderRadius: "16px",
@@ -405,8 +440,8 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
           alignItems: "center"
         }}>
           <h2 style={{ margin: 0, color: "white", display: "flex", alignItems: "center", gap: "10px" }}>
-            <SettingsIcon size={24} />
-            Settings
+            {headerIcon === "profile" ? <User size={24} /> : <SettingsIcon size={24} />}
+            {title}
           </h2>
           <button
             onClick={onClose}
@@ -523,8 +558,12 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
           padding: window.innerWidth < 768 ? "20px 20px" : "24px 40px",
           overflowY: "auto",
           flex: 1,
-          color: "white"
-        }}>
+          color: "white",
+          scrollbarWidth: "thin",
+          scrollbarColor: "#475569 #1e293b"
+        }}
+        className="settings-modal-scroll"
+        >
           {activeTab === "profile" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px", paddingTop: "8px" }}>
               {/* Profile Picture */}
@@ -940,6 +979,57 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
                   <span>Password changed!</span>
                 </div>
               </button>
+
+              {/* Danger Zone */}
+              <div style={{
+                marginTop: "12px",
+                padding: "20px",
+                background: "rgba(239, 68, 68, 0.05)",
+                border: "1px solid rgba(239, 68, 68, 0.25)",
+                borderRadius: "12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px"
+              }}>
+                <div>
+                  <h4 style={{ margin: "0 0 4px 0", color: "#ef4444", fontSize: "15px", fontWeight: "600", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Trash2 size={16} />
+                    Danger Zone
+                  </h4>
+                  <p style={{ margin: 0, color: "#94a3b8", fontSize: "13px", lineHeight: "1.5" }}>
+                    Permanently delete your account and all associated data. This action cannot be undone.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    padding: "11px 20px",
+                    background: "transparent",
+                    border: "1px solid #ef4444",
+                    borderRadius: "8px",
+                    color: "#ef4444",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    transition: "all 0.2s",
+                    alignSelf: "flex-start"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#ef4444";
+                    e.currentTarget.style.color = "white";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "#ef4444";
+                  }}
+                >
+                  <Trash2 size={16} />
+                  Delete Account Permanently
+                </button>
+              </div>
             </div>
           )}
 
@@ -1339,6 +1429,115 @@ export default function Settings({ isOpen, onClose, user, onUpdate }) {
           </button>
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.85)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 3000
+        }}>
+          <div style={{
+            background: "#1e293b",
+            borderRadius: "16px",
+            padding: "30px",
+            maxWidth: "420px",
+            width: "90%",
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+            border: "1px solid rgba(239, 68, 68, 0.3)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <Trash2 size={24} color="#ef4444" />
+              <h3 style={{ margin: 0, fontSize: "20px", color: "white" }}>Delete Account</h3>
+            </div>
+
+            <div style={{
+              padding: "14px 16px",
+              background: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              borderRadius: "8px"
+            }}>
+              <p style={{ margin: 0, color: "#fca5a5", fontSize: "14px", lineHeight: "1.6", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <AlertTriangle size={16} style={{ color: "#f97316", flexShrink: 0, marginTop: "2px" }} />
+                <span>This will <strong>permanently delete</strong> your account and all your data from our servers. This action <strong>cannot be undone</strong>.</span>
+              </p>
+            </div>
+
+            <p style={{ margin: 0, color: "#94a3b8", fontSize: "14px", lineHeight: "1.5" }}>
+              Are you absolutely sure you want to delete your account?
+            </p>
+
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "#475569",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "white",
+                  cursor: deleteLoading ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  opacity: deleteLoading ? 0.6 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "#ef4444",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "white",
+                  cursor: deleteLoading ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  opacity: deleteLoading ? 0.7 : 1
+                }}
+              >
+                {deleteLoading ? (
+                  <>
+                    <div style={{
+                      width: "16px",
+                      height: "16px",
+                      border: "2px solid rgba(255,255,255,0.3)",
+                      borderTopColor: "white",
+                      borderRadius: "50%",
+                      animation: "spin 0.6s linear infinite"
+                    }} />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    Yes, Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (

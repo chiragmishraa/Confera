@@ -63,6 +63,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const guestLogin = async () => {
+    try {
+      setError(null);
+      const response = await authAPI.guestLogin();
+      localStorage.setItem('token', response.data.token);
+      setUser(response.data.user);
+      return response;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
   const logout = async () => {
     try {
       await authAPI.logout();
@@ -85,6 +98,7 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     signup,
+    guestLogin,
     logout,
     updateUser,
     checkAuth,

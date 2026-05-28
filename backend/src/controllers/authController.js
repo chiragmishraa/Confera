@@ -166,6 +166,61 @@ exports.changePassword = async (req, res, next) => {
   }
 };
 
+exports.guestLogin = async (req, res, next) => {
+  try {
+    // Generate a random 6-char alphanumeric suffix
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let suffix = '';
+    for (let i = 0; i < 6; i++) {
+      suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    const suffixLower = suffix.toLowerCase();
+    const name = `Confera User - ${suffix}`;
+    const username = `conferauser${suffixLower}`;
+    const email = `user${suffixLower}@confera.com`;
+    const password = username; // password same as username
+
+    // Ensure uniqueness (extremely unlikely collision, but safe)
+    const existing = await User.findOne({ $or: [{ email }, { username }] });
+    if (existing) {
+      // Retry by calling the handler again (tail-call style via next route)
+      return exports.guestLogin(req, res, next);
+    }
+
+    const user = await User.create({ name, username, email, password });
+
+    user.lastLogin = Date.now();
+    await user.save();
+
+    const token = user.generateAuthToken();
+
+    logger.info('Guest user created and logged in', { userId: user._id, username });
+
+    return successResponse(
+      res,
+      { token, user: user.getPublicProfile() },
+      'Guest login successful',
+      201
+    );
+  } catch (error) {
+    logger.error('Guest login error:', error);
+    next(error);
+  }
+};
+
+exports.deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    await User.findByIdAndDelete(userId);
+    logger.info('Account deleted', { userId });
+    return successResponse(res, null, 'Account deleted successfully');
+  } catch (error) {
+    logger.error('Delete account error:', error);
+    next(error);
+  }
+};
+
 exports.logout = async (req, res, next) => {
   try {
     return successResponse(
